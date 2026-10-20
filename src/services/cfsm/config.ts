@@ -201,6 +201,17 @@ export function subscribeTurnstileCredentialsCleared(listener: () => void): () =
   };
 }
 
+/**
+ * 站点没开全局人机验证时丢掉缓存的凭证（后端主题规范：`turnstile_enabled !== true` 时请求不带 Turnstile 头）。
+ * 站长关掉验证之前留下的凭证再带着也没用。不通知订阅方：通知会让验证弹窗重新拉 `/api/config`，
+ * 而调用这里的就是刚拉回来的那一份。
+ */
+export function discardTurnstileCredentials(): void {
+  if (!getTurnstileToken() && !getTurnstileVerified()) return;
+  writeStorage(TURNSTILE_TOKEN_KEY, "");
+  writeStorage(TURNSTILE_VERIFIED_KEY, "");
+}
+
 export function clearTurnstileCredentials(): void {
   const hadVerified = Boolean(getTurnstileVerified());
   const hadCredentials = Boolean(getTurnstileToken() || hadVerified);

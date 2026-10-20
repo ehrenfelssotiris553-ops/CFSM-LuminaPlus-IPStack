@@ -18,7 +18,7 @@ import {
   type PublicConfig,
   type SysConfig,
 } from "@/types/cfsm";
-import { getApiBases, getJwtToken } from "@/services/cfsm/config";
+import { discardTurnstileCredentials, getApiBases, getJwtToken } from "@/services/cfsm/config";
 import {
   ApiRequestError,
   cfsmGet,
@@ -169,6 +169,8 @@ export async function saveThemeOptions(
  */
 export async function getPublic(options?: RequestOptions): Promise<PublicConfig> {
   const config = await getSiteConfig(options);
+  // 站长关掉了全局人机验证：之前缓存的凭证不再随请求发送（后端主题规范：未启用时不带 Turnstile 头）。
+  if (config.turnstile_enabled !== true) discardTurnstileCredentials();
   // 内容要等配置到手才渲染（AppShell 先只显示加载圈），在这里定语言，页面一出来就是对的语言。
   applySiteLanguage(config.default_language);
   const carrierNames = resolveCarrierNames({

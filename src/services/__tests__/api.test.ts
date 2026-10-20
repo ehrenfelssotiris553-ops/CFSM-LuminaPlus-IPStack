@@ -243,7 +243,8 @@ describe("getPublic", () => {
 
   it("caches the encrypted turnstile credential for reuse", async () => {
     fetchMock.mockImplementation(
-      jsonReply({ site_title: "S", turnstile_verified: "cred-1" }),
+      // 后端只在开着全局人机验证时下发凭证。
+      jsonReply({ site_title: "S", turnstile_enabled: true, turnstile_verified: "cred-1" }),
     );
 
     await getPublic();
@@ -365,6 +366,32 @@ describe("Turnstile 凭证过期", () => {
     expect(onCleared).toHaveBeenCalledTimes(1);
 
     unsubscribe();
+  });
+
+  it("stops sending old credentials once the site has Turnstile turned off, without refetching config", async () => {
+    window.localStorage.setItem("turnstile_verified", "left-over-cred");
+    fetchMock.mockImplementation(jsonReply({ site_title: "S", turnstile_enabled: false }));
+    const onCleared = vi.fn();
+    const unsubscribe = subscribeTurnstileCredentialsCleared(onCleared);
+
+    await getPublic();
+    // 后端主题规范：turnstile_enabled !== true 时不带 Turnstile 头。
+    expect(window.localStorage.getItem("turnstile_verified")).toBeNull();
+    // 不通知验证弹窗：通知会让它再拉一次 /api/config。
+    expect(onCleared).not.toHaveBeenCalled();
+
+    await getServersSnapshot().catch(() => undefined);
+    const headers = new Headers(fetchMock.mock.calls.at(-1)![1]?.headers);
+    expect(headers.has("X-Turnstile-Verified")).toBe(false);
+    unsubscribe();
+  });
+
+  it("keeps the credentials while the site still uses Turnstile", async () => {
+    window.localStorage.setItem("turnstile_verified", "good-cred");
+    fetchMock.mockImplementation(jsonReply({ site_title: "S", turnstile_enabled: true }));
+
+    await getPublic();
+    expect(window.localStorage.getItem("turnstile_verified")).toBe("good-cred");
   });
 });
 
