@@ -123,7 +123,9 @@ export default defineConfig(({ mode }) => {
             if (normalized.includes("/node_modules/@tanstack/react-query/")) {
               return "query";
             }
-            if (/\/node_modules\/(?:uplot|uplot-react)\//.test(normalized)) {
+            // 只放 uPlot 本体。uplot-react 也放进来时，Rolldown 会把它依赖的 React 核心一起拉进 charts，
+            // 首页离不开 React，结果首页也得预加载整个图表包（62KB，详情页才用得到）。
+            if (normalized.includes("/node_modules/uplot/")) {
               return "charts";
             }
             if (normalized.includes("/node_modules/zod/")) {
