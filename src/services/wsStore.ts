@@ -133,7 +133,7 @@ const SNAPSHOT_RATE_MAX_AGE_MS = 10_000;
 const SERVERS_REQUEST_TIMEOUT_MS = 8_000;
 
 /* ------------------------------------------------------------------ *
- * WebSocket 推送回放（按到达节奏匀速铺开）
+ * WebSocket 推送回放（按到达节奏匀速铺开）—— 只用于详情页；首页每秒合并提交一次，见 HOME_WS_FLUSH_MS
  * ------------------------------------------------------------------ */
 /**
  * 后端会按"有没有人在看"调整上报频率，一次推来的样本数因此不固定（实测：活跃节点约 2 秒一条，
@@ -1068,12 +1068,79 @@ function runWsTick(): void {
   if (wsPendingByServer.size > 0) scheduleWsTick();
 }
 
+/* ---- 首页：每秒合并提交一次 ---- */
+
 /**
- * WS 推送入口：按节点入队，并实测每台节点自己的到达节奏；
- * 由 {@link runWsTick} 按各自节奏把帧匀速放出，快的节点放得密、慢的放得疏，各自都匀速。
+ * 首页的推送攒满这么久提交一次（后端主题规范：首页渲染最多每秒一次，每秒内每台只取最新值）。
+ *
+ * 首页一次要画几十张卡片，逐帧匀速回放会让整页每秒重渲染好几次；首页只需要「现在是多少」，
+ * 每秒刷一次就够。详情页只看一台、还要画实时曲线，仍走上面的匀速回放（见 {@link enqueueWsSamples}）。
+ */
+export const HOME_WS_FLUSH_MS = 1_000;
+let homeWsBatch: WsSample[] = [];
+/** 这一批里每台最新那帧的时间，挡掉晚到的旧帧。 */
+const homeWsLatestTs = new Map<string, number>();
+let homeWsFlushTimer: number | null = null;
+
+/**
+ * 一秒内同一台的多帧按到达顺序**依次合并**，而不是只留最后一帧：增量帧只带一部分字段，
+ * 报告级字段（磁盘、延迟、进程数等）只在每次上报的最后一帧里，丢掉中间帧会连它们一起丢。
+ * 合并后的结果就是「这一秒结束时每台的最新值」，一次提交。
+ */
+function bufferHomeWsSamples(samples: WsSample[]): void {
+  const now = Date.now();
+  const skewLimit = now + MAX_FUTURE_CLOCK_SKEW_MS;
+  for (const sample of samples) {
+    const serverId = sample.serverId;
+    const ts = normalizeTimestamp(sample.ts);
+    // 不把已显示的节点倒回更旧的帧；时钟超前过的节点，已显示的时间不可信，不拿它挡新帧。
+    const storedTs = normalizeTimestamp(state.rawByUuid[serverId]?.last_updated ?? 0);
+    const shownTs = storedTs > skewLimit ? 0 : storedTs;
+    let bufferedTs = homeWsLatestTs.get(serverId) ?? 0;
+    if (bufferedTs > skewLimit && ts > 0 && ts <= skewLimit) {
+      // 节点时钟校正回来了：丢掉这批里它超前的那些帧，从校正后的帧接着算。
+      homeWsBatch = homeWsBatch.filter(
+        (queued) => queued.serverId !== serverId || normalizeTimestamp(queued.ts) <= skewLimit,
+      );
+      bufferedTs = 0;
+    }
+    if (ts > 0 && (ts <= shownTs || ts <= bufferedTs)) continue;
+    homeWsBatch.push(sample);
+    if (ts > 0) homeWsLatestTs.set(serverId, ts);
+  }
+  if (homeWsBatch.length > 0 && homeWsFlushTimer == null) {
+    homeWsFlushTimer = window.setTimeout(flushHomeWsBatch, HOME_WS_FLUSH_MS);
+  }
+}
+
+function flushHomeWsBatch(): void {
+  homeWsFlushTimer = null;
+  const batch = homeWsBatch;
+  homeWsBatch = [];
+  homeWsLatestTs.clear();
+  if (batch.length === 0) return;
+  if (WS_DEBUG) {
+    const now = Date.now();
+    const gap = wsDebugLastCommitAt > 0 ? now - wsDebugLastCommitAt : 0;
+    wsDebugLastCommitAt = now;
+    wsDebugCommits += 1;
+    console.info(
+      `[LuminaPlus WS] commit#${wsDebugCommits} 首页合并 ${batch.length} 帧 · 距上次${gap}ms`,
+    );
+  }
+  applyWsSamples(batch);
+}
+
+/**
+ * WS 推送入口。首页按秒合并（{@link bufferHomeWsSamples}）；详情页按节点入队，并实测每台节点自己的到达节奏，
+ * 由 {@link runWsTick} 按各自节奏把帧匀速放出，实时曲线才是匀速的。
  */
 function enqueueWsSamples(samples: WsSample[]): void {
   if (samples.length === 0) return;
+  if (activeFocusUuid(latestBaseByServerId) == null) {
+    bufferHomeWsSamples(samples);
+    return;
+  }
   const now = Date.now();
 
   for (const sample of samples) {
@@ -1122,6 +1189,12 @@ function resetWsCoalesceState(): void {
     window.clearTimeout(wsTickTimer);
     wsTickTimer = null;
   }
+  if (homeWsFlushTimer != null) {
+    window.clearTimeout(homeWsFlushTimer);
+    homeWsFlushTimer = null;
+  }
+  homeWsBatch = [];
+  homeWsLatestTs.clear();
   wsPendingByServer.clear();
   wsDebugCommits = 0;
   wsDebugLastCommitAt = 0;

@@ -620,6 +620,89 @@ describe("resolveRealtimeSessionLimitMs", () => {
 });
 
 
+describe("首页每秒合并提交一次", () => {
+  it("commits at most once per second and keeps report fields from earlier frames in that second", async () => {
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    let renders = 0;
+    const unsubscribe = store.subscribeToNodeMetrics("node-a", () => {
+      renders += 1;
+    });
+
+    const base = Date.now();
+    const frame = (offset: number, data: Record<string, unknown>) => ({
+      serverId: "node-a",
+      ts: base + offset,
+      reportTs: base + offset,
+      data,
+    });
+    // 一秒内到了三帧：中间那帧是上报的最后一帧，带进程数；最后一帧只有 CPU。
+    mocks.connections[0]!.emitSamples([frame(100, { cpu: 10 })]);
+    await vi.advanceTimersByTimeAsync(300);
+    mocks.connections[0]!.emitSamples([frame(400, { cpu: 20, processes: 321 })]);
+    await vi.advanceTimersByTimeAsync(300);
+    mocks.connections[0]!.emitSamples([frame(700, { cpu: 30 })]);
+    expect(renders).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(renders).toBe(1);
+    const metrics = store.getNodeMetricsSnapshot("node-a");
+    expect(metrics?.cpuPct).toBe(30);
+    expect(metrics?.process).toBe(321);
+    expect(metrics?.updatedAt).toBe(base + 700);
+
+    // 晚到的旧帧不会把显示倒回去。
+    mocks.connections[0]!.emitSamples([frame(200, { cpu: 99 })]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(store.getNodeMetricsSnapshot("node-a")?.cpuPct).toBe(30);
+
+    unsubscribe();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it("still plays frames one by one on the detail page for the live chart", async () => {
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    const leave = store.focusRealtimeNode("node-a");
+    await vi.advanceTimersByTimeAsync(0);
+    const detailSocket = mocks.connections.at(-1)!;
+    expect(detailSocket.serverId).toBe("node-a");
+
+    const now = Date.now();
+    detailSocket.emitSamples([
+      { serverId: "node-a", ts: now + 100, reportTs: now, data: { cpu: 11 } },
+      { serverId: "node-a", ts: now + 200, reportTs: now, data: { cpu: 22 } },
+    ]);
+    // 第一帧马上放出，第二帧按节奏稍后放：实时曲线上是两个点，不是合成一个。
+    await vi.advanceTimersByTimeAsync(150);
+    expect(store.getNodeMetricsSnapshot("node-a")?.cpuPct).toBe(11);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(store.getNodeMetricsSnapshot("node-a")?.cpuPct).toBe(22);
+
+    leave();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it("drops the unsent second when the page goes to the background", async () => {
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    const now = Date.now();
+    mocks.connections[0]!.emitSamples([{ serverId: "node-a", ts: now + 100, reportTs: now, data: { cpu: 55 } }]);
+    setHidden(true);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(store.getNodeMetricsSnapshot("node-a")?.cpuPct).not.toBe(55);
+
+    setHidden(false);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+});
+
 describe("clock correction playback", () => {
   it("accepts corrected-time samples after a future clock sample was shown", async () => {
     mocks.getServersSnapshot.mockImplementation(async () => {
