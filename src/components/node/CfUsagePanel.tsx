@@ -29,6 +29,7 @@ const METRIC_LABEL_KEYS: Record<CfUsageMetric, MessageKey> = {
   rowsWritten: "cfUsage.rowsWritten",
   workersRequests: "cfUsage.workersRequests",
   durableObjectsRequests: "cfUsage.durableObjectsRequests",
+  durableObjectsDuration: "cfUsage.durableObjectsDuration",
 };
 
 function updatedLabel(updatedAt: number, now: number): string {
@@ -46,6 +47,13 @@ function durableObjectsBreakdown(day: CfUsageDay): string {
     messages: plainNumber().format(day.durableObjectsInboundWebSocketMessages),
     ratio: day.durableObjectsRequestBillingRatio,
   });
+}
+
+/** 两项 DO 指标不直观，悬停说明怎么来的。 */
+function meterTitle(metric: CfUsageMetric, day: CfUsageDay | undefined): string | undefined {
+  if (metric === "durableObjectsDuration") return t("cfUsage.durableObjectsDurationTip");
+  if (metric === "durableObjectsRequests" && day) return durableObjectsBreakdown(day);
+  return undefined;
 }
 
 function UsageError({ error }: { error: unknown }) {
@@ -130,7 +138,7 @@ export function CfUsagePanel() {
               key={meter.metric}
               className="cf-usage-meter"
               data-level={meter.level}
-              title={meter.metric === "durableObjectsRequests" && query.data ? durableObjectsBreakdown(query.data[day]) : undefined}
+              title={meterTitle(meter.metric, query.data?.[day])}
             >
               <div className="cf-usage-meter-top">
                 <span className="cf-usage-meter-label">{t(METRIC_LABEL_KEYS[meter.metric])}</span>

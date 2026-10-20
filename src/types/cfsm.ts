@@ -305,6 +305,8 @@ export const CfUsageDaySchema = z
     durableObjectsHttpRequests: looseNumber.default(0),
     durableObjectsHibernationWakeups: looseNumber.default(0),
     durableObjectsInboundWebSocketMessages: looseNumber.default(0),
+    /** DO 时长（GB-s），只和 WSS 连接开着多久有关，和节点台数无关。 */
+    durableObjectsDuration: looseNumber.default(0),
     /** 收到的 WebSocket 消息按多少条折成一次 DO 请求（Cloudflare 计费规则，后端写死 20）。 */
     durableObjectsRequestBillingRatio: looseNumber.default(20),
   })

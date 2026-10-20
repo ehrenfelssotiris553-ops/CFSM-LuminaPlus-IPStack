@@ -68,6 +68,7 @@ describe("cfUsageMeters", () => {
       rowsWritten: 75_000,
       workersRequests: "95000",
       durableObjectsRequests: 120_000,
+      durableObjectsDuration: 11_050.5,
     });
     const meters = cfUsageMeters(day);
     expect(meters.map((meter) => meter.metric)).toEqual([
@@ -75,8 +76,11 @@ describe("cfUsageMeters", () => {
       "rowsWritten",
       "workersRequests",
       "durableObjectsRequests",
+      "durableObjectsDuration",
     ]);
-    expect(meters.map((meter) => meter.level)).toEqual(["ok", "warn", "danger", "danger"]);
+    expect(meters.map((meter) => meter.level)).toEqual(["ok", "warn", "danger", "danger", "warn"]);
+    // DO 时长对比每天 13,000 GB-s。
+    expect(meters[4]).toMatchObject({ used: 11_050.5, limit: 13_000 });
     expect(meters[0]).toMatchObject({ used: 1_000_000, limit: 5_000_000, ratio: 0.2 });
     // 超额时比例照实给（条子在界面上封顶 100%）。
     expect(meters[3]!.ratio).toBeCloseTo(1.2);

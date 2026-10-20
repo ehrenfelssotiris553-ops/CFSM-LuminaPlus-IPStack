@@ -662,6 +662,8 @@ export const es: Messages = {
   "cfUsage.rowsWritten": "Filas escritas D1",
   "cfUsage.workersRequests": "Solicitudes Workers",
   "cfUsage.durableObjectsRequests": "Solicitudes DO (est.)",
+  "cfUsage.durableObjectsDuration": "Duración DO (GB-s)",
+  "cfUsage.durableObjectsDurationTip": "Depende de cuánto tiempo están abiertas las conexiones WSS: mantener una abierta todo el día usa cerca del 85 %, sin importar cuántos servidores tengas.",
   "cfUsage.durableObjectsBreakdown": "Estimación: {http} solicitudes HTTP + {wakeups} reactivaciones + {messages} mensajes WebSocket recibidos (cada {ratio} cuentan como 1)",
   "cfUsage.notConfigured": "Falta el token o el ID de cuenta de Cloudflare en el panel de administración.",
   "cfUsage.openAdmin": "Abrir administración",

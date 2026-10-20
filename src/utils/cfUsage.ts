@@ -59,6 +59,7 @@ export const CF_FREE_DAILY_LIMITS = {
   rowsWritten: 100_000,
   workersRequests: 100_000,
   durableObjectsRequests: 100_000,
+  durableObjectsDuration: 13_000,
 } as const;
 
 export type CfUsageMetric = keyof typeof CF_FREE_DAILY_LIMITS;
@@ -67,6 +68,7 @@ export const CF_USAGE_METRICS: readonly CfUsageMetric[] = [
   "rowsWritten",
   "workersRequests",
   "durableObjectsRequests",
+  "durableObjectsDuration",
 ];
 
 export type CfUsageLevel = "ok" | "warn" | "danger";

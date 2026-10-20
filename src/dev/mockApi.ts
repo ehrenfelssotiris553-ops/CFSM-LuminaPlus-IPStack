@@ -434,6 +434,7 @@ export function installDevMockApi() {
         durableObjectsHttpRequests: Math.round(1_200 * scale),
         durableObjectsHibernationWakeups: Math.round(600 * scale),
         durableObjectsInboundWebSocketMessages: Math.round(1_840_000 * scale),
+        durableObjectsDuration: Math.round(11_050 * scale * 100) / 100,
         durableObjectsRequestsEstimated: true,
         durableObjectsRequestBillingRatio: 20,
       });

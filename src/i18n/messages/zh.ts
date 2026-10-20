@@ -664,6 +664,8 @@ export const zh = {
   "cfUsage.rowsWritten": "D1 写入行数",
   "cfUsage.workersRequests": "Workers 请求",
   "cfUsage.durableObjectsRequests": "DO 请求（估算）",
+  "cfUsage.durableObjectsDuration": "DO 时长 (GB-s)",
+  "cfUsage.durableObjectsDurationTip": "和 WSS 连接开着多久有关，24 小时开着固定占 85% 左右，不受服务器台数影响。",
   "cfUsage.durableObjectsBreakdown": "估算方法：HTTP 请求 {http} + 休眠唤醒 {wakeups} + 收到的 WebSocket 消息 {messages} 条（每 {ratio} 条算 1 次）",
   "cfUsage.notConfigured": "后台还没填 Cloudflare Token 或 Account ID。",
   "cfUsage.openAdmin": "去后台设置",
