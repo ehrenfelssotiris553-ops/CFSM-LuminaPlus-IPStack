@@ -31,6 +31,7 @@ describe("theme version parsing", () => {
       await loadModule();
 
     expect(parseThemeVersionMeta("LuminaPlus v1.2.15")).toBe("1.2.15");
+    expect(parseThemeVersionMeta("LuminaPlus v1.2.21+ipstack.1")).toBe("1.2.21+ipstack.1");
     expect(parseThemeVersionMeta("LuminaPlus")).toBeNull();
     expect(extractThemeVersionFromHtml(RELEASE_HTML)).toBe("1.2.16");
 

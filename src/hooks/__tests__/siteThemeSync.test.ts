@@ -8,6 +8,7 @@ import {
   resetSiteThemeSyncForTest,
   restoreSiteThemeBackup,
   retrySiteThemeSync,
+  resolveSiteThemeConflict,
   SITE_BACKUP_SETTLE_MS,
   SITE_SYNC_MARKER_KEY,
   SITE_THEME_SYNC_DEBOUNCE_MS,
@@ -26,6 +27,7 @@ import {
   saveLocalThemeSettings,
 } from "@/services/themeSettingsStore";
 import type { PublicConfig } from "@/types/cfsm";
+import { LOCAL_IP_STACK_EDITS_KEY } from "@/utils/ipStack";
 
 const mocks = vi.hoisted(() => ({
   saveThemeOptions: vi.fn(),
@@ -97,6 +99,38 @@ afterEach(() => {
 });
 
 describe("登录站长的改动自动同步到后端", () => {
+  it("keeps undo-to-Auto while a badge save is in flight", async () => {
+    let finishFirst: (() => void) | undefined;
+    mocks.saveThemeOptions.mockImplementationOnce((options: Record<string, unknown>) => new Promise((resolve) => {
+      finishFirst = () => resolve({ success: true, theme_options: options });
+    }));
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: true } } });
+    await flushDebounce();
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(1);
+    saveLocalThemeSettings({ [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: "auto" } } });
+    await flushDebounce();
+    acceptWrites();
+    finishFirst?.();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(2);
+    expect(siteSettings()?.homepageIpStackOverrides).toEqual({});
+    expect(siteSettings()).not.toHaveProperty(LOCAL_IP_STACK_EDITS_KEY);
+    expect(getLocalThemeSettings()).toEqual({});
+  });
+
+  it("merges a node badge edit into the fresh backend snapshot", async () => {
+    acceptWrites();
+    seedConfig({ homepageIpStackOverrides: { a: { ipv4: true } } });
+    mocks.getPublic.mockResolvedValue({
+      theme_settings: { homepageIpStackOverrides: { a: { ipv4: true, ipv6: false }, b: { ipv4: false } } },
+    } as unknown as PublicConfig);
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: false } } });
+    await flushDebounce();
+    expect(siteSettings()?.homepageIpStackOverrides).toEqual({ a: { ipv4: false, ipv6: false }, b: { ipv4: false } });
+  });
   it("停手后只发一次，发完以后端为准、本机清空", async () => {
     acceptWrites();
     stop = startSiteThemeAutoSync();
@@ -407,5 +441,42 @@ describe("后端被别人整份改掉时从本机备份恢复", () => {
 
     await expect(restoreSiteThemeBackup()).rejects.toBeInstanceOf(ApiRequestError);
     expect(getSiteThemeSyncStatus().phase).toBe("synced");
+  });
+});
+
+
+describe("observed configuration conflicts", () => {
+  it("pauses overlapping edits until the admin explicitly chooses to keep local edits", async () => {
+    seedConfig({ costRateApiUrl: "https://old.example/rates" });
+    mocks.getPublic.mockImplementation(async () => ({ ...queryClient.getQueryData<PublicConfig>(["public"]), theme_settings: { costRateApiUrl: "https://remote.example/rates" } }));
+    acceptWrites();
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ costRateApiUrl: "https://local.example/rates" });
+    await flushDebounce();
+    expect(getSiteThemeSyncStatus().phase).toBe("conflict");
+    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
+    saveLocalThemeSettings({ costRateApiUrl: "https://local-2.example/rates" });
+    await flushDebounce();
+    expect(getSiteThemeSyncStatus().phase).toBe("conflict");
+    retrySiteThemeSync();
+    await flushDebounce();
+    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
+    resolveSiteThemeConflict(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(1);
+    expect(mocks.saveThemeOptions.mock.calls[0][0].costRateApiUrl).toBe("https://local-2.example/rates");
+    expect(getSiteThemeSyncStatus().phase).toBe("synced");
+  });
+  it("can discard local conflicts without writing to the backend", async () => {
+    seedConfig({ costRateApiUrl: "https://old.example/rates" });
+    mocks.getPublic.mockImplementation(async () => ({ ...queryClient.getQueryData<PublicConfig>(["public"]), theme_settings: { costRateApiUrl: "https://remote.example/rates" } }));
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ costRateApiUrl: "https://local.example/rates" });
+    await flushDebounce();
+    expect(getSiteThemeSyncStatus().phase).toBe("conflict");
+    resolveSiteThemeConflict(false);
+    expect(getLocalThemeSettings()).toEqual({});
+    expect(getSiteThemeSyncStatus().phase).toBe("idle");
+    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
   });
 });

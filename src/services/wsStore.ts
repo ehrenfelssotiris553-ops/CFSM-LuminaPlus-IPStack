@@ -1,3 +1,4 @@
+import { MAX_FUTURE_CLOCK_SKEW_MS } from "@/services/cfsm/mappers";
 import type {
   CfsmServer,
   NodeInfo,
@@ -756,7 +757,7 @@ async function performServersSync(focusUuid: string | null) {
         realtimeKnownUnavailable(),
       );
       const nextMetrics =
-        previousMetrics && previousMetrics.updatedAt > restMetrics.updatedAt
+        previousMetrics && previousMetrics.updatedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS && previousMetrics.updatedAt > restMetrics.updatedAt
           ? {
               ...previousMetrics,
               online: restMetrics.online,
@@ -1004,7 +1005,9 @@ function enqueueWsSamples(samples: WsSample[]): void {
     const serverId = sample.serverId;
     const ts = normalizeTimestamp(sample.ts);
     // 不把已显示（REST 首屏或已提交过）的节点倒回更旧的帧。
-    const shownTs = normalizeTimestamp(state.rawByUuid[serverId]?.last_updated ?? 0);
+    const storedTs = normalizeTimestamp(state.rawByUuid[serverId]?.last_updated ?? 0);
+    const recoveringClock = storedTs > now + MAX_FUTURE_CLOCK_SKEW_MS && ts <= now + MAX_FUTURE_CLOCK_SKEW_MS;
+    const shownTs = storedTs > now + MAX_FUTURE_CLOCK_SKEW_MS ? 0 : storedTs;
     if (ts > 0 && ts <= shownTs) continue;
 
     let pending = wsPendingByServer.get(serverId);
@@ -1013,6 +1016,7 @@ function enqueueWsSamples(samples: WsSample[]): void {
       wsPendingByServer.set(serverId, pending);
     }
 
+    if (recoveringClock) pending.queue = pending.queue.filter((queued) => normalizeTimestamp(queued.ts) <= now + MAX_FUTURE_CLOCK_SKEW_MS);
     const lastQueuedTs =
       pending.queue.length > 0
         ? normalizeTimestamp(pending.queue[pending.queue.length - 1]!.ts)

@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSiteThemeOptions } from "@/hooks/useSiteThemeOptions";
 import { EMPTY_PING_LINE_OVERRIDES_BY_NODE } from "@/utils/pingLineOverrides";
+import { LOCAL_IP_STACK_EDITS_KEY } from "@/utils/ipStack";
 
 const base = {
   siteSettings: undefined,
@@ -11,6 +12,27 @@ const base = {
 };
 
 describe("buildSiteThemeOptions", () => {
+  it("keeps an explicit Auto choice through newer backend data without deleting other nodes", () => {
+    const snapshot = buildSiteThemeOptions({
+      ...base,
+      siteSettings: { homepageIpStackOverrides: { a: { ipv4: true, ipv6: true }, b: { ipv6: false } } },
+      localSettings: { [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: "auto", ipv6: false } } },
+    });
+    expect(snapshot.homepageIpStackOverrides).toEqual({ a: { ipv6: false }, b: { ipv6: false } });
+    expect(snapshot).not.toHaveProperty(LOCAL_IP_STACK_EDITS_KEY);
+  });
+  it("exports badge defaults and per-node overrides through the existing backend save path", () => {
+    const snapshot = buildSiteThemeOptions({
+      ...base,
+      siteSettings: { showIpv4: false, homepageIpStackOverrides: { a: { ipv6: false } } },
+      localSettings: { showIpv6: false },
+    });
+    expect(snapshot).toMatchObject({
+      showIpv4: false,
+      showIpv6: false,
+      homepageIpStackOverrides: { a: { ipv6: false } },
+    });
+  });
   it("keeps the backend's default appearance when no theme setting names one", () => {
     // 取色器的「保存到后端」曾把「跟随系统」写进站点配置，后台设的深色对所有访客失效。
     expect(buildSiteThemeOptions({ ...base, preferredAppearance: "dark" }).defaultAppearance).toBe(

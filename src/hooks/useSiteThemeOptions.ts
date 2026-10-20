@@ -17,6 +17,9 @@ import {
   subscribeLocalThemeSettingsEdits,
 } from "@/services/themeSettingsStore";
 import type { PublicConfig, ThemeSettings } from "@/types/cfsm";
+import { SITE_SYNC_MARKER_KEY, themeSyncMarkerOf as syncMarkerOf } from "@/utils/themeMeta";
+import { findThemeConflicts, ThemeSyncConflictError } from "@/utils/themeConflicts";
+export { SITE_SYNC_MARKER_KEY } from "@/utils/themeMeta";
 import {
   EMPTY_PING_LINE_OVERRIDES_BY_NODE,
   mergePingLineOverridesByNode,
@@ -24,6 +27,7 @@ import {
 } from "@/utils/pingLineOverrides";
 import {
   normalizeThemeSettings,
+  mergeThemeSettingsLayers,
   withPreferredAppearance,
   type Appearance,
 } from "@/utils/themeSettings";
@@ -59,11 +63,7 @@ export function buildSiteThemeOptions({
   localLineOverrides,
 }: SiteThemeOptionsSources): Record<string, unknown> {
   const normalized = normalizeThemeSettings(
-    withPreferredAppearance(preferredAppearance, {
-      ...(siteSettings ?? {}),
-      ...localSettings,
-      ...draftSettings,
-    }) as ThemeSettings & Record<string, unknown>,
+    withPreferredAppearance(preferredAppearance, mergeThemeSettingsLayers(siteSettings, localSettings, draftSettings)) as ThemeSettings & Record<string, unknown>,
   );
   return {
     ...normalized,
@@ -121,7 +121,7 @@ export const SITE_THEME_SYNC_DEBOUNCE_MS = 1_000;
  */
 const SYNC_PENDING_STORAGE_KEY = "cfsm-luminaplus:site-sync-pending";
 
-export type SiteThemeSyncPhase = "idle" | "pending" | "saving" | "synced" | "error";
+export type SiteThemeSyncPhase = "idle" | "pending" | "saving" | "synced" | "error" | "conflict";
 
 export interface SiteThemeSyncStatus {
   phase: SiteThemeSyncPhase;
@@ -137,6 +137,20 @@ let syncTimer: ReturnType<typeof setTimeout> | undefined;
 let syncRunning = false;
 let syncRerun = false;
 let editSeq = 0;
+const SYNC_BASE_KEY = "cfsm-luminaplus:sync-base:v1";
+let syncBase: Pick<SiteThemeOptionsSources, "siteSettings" | "preferredAppearance"> | null = null;
+let allowConflictOnce = false;
+
+function rememberSyncBase(config: PublicConfig | undefined) {
+  if (!config) return;
+  syncBase = { siteSettings: config.theme_settings, preferredAppearance: config.preferredAppearance };
+  try { window.localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(syncBase)); } catch { /* memory fallback */ }
+}
+
+function clearSyncBase() {
+  syncBase = null;
+  try { window.localStorage.removeItem(SYNC_BASE_KEY); } catch { /* memory fallback */ }
+}
 
 function setSyncStatus(next: SiteThemeSyncStatus) {
   syncStatus = next;
@@ -191,8 +205,10 @@ function sameJson(left: unknown, right: unknown) {
 
 function handleLocalEdit() {
   if (!canSyncSiteTheme()) return;
+  if (!syncBase) rememberSyncBase(queryClient.getQueryData<PublicConfig>(["public"]));
   editSeq += 1;
   writeSyncPending(true);
+  if (syncStatus.phase === "conflict") return;
   if (!syncRunning) setSyncStatus({ phase: "pending", error: null });
   scheduleSync(SITE_THEME_SYNC_DEBOUNCE_MS);
 }
@@ -234,13 +250,19 @@ async function runSync() {
       localLineOverrides: EMPTY_PING_LINE_OVERRIDES_BY_NODE,
     };
     const snapshot = buildSiteThemeOptions({ ...site, localSettings, localLineOverrides });
-    if (!sameJson(snapshot, buildSiteThemeOptions(site))) {
+    if (syncBase && !allowConflictOnce) {
+      const old = { ...syncBase, localSettings: {}, localLineOverrides: EMPTY_PING_LINE_OVERRIDES_BY_NODE };
+      const fields = findThemeConflicts(buildSiteThemeOptions(old), buildSiteThemeOptions(site), buildSiteThemeOptions({ ...old, localSettings, localLineOverrides }));
+      if (fields.length > 0) throw new ThemeSyncConflictError(fields);
+    }
+    allowConflictOnce = false;
+    if (!sameJson(snapshot, buildSiteThemeOptions(site)) || config.pingDisplayMigration === true) {
       const { theme_options: saved } = await saveThemeOptions({
         ...snapshot,
         [SITE_SYNC_MARKER_KEY]: Date.now(),
       });
       queryClient.setQueryData<PublicConfig>(["public"], (current) =>
-        current ? { ...current, theme_settings: saved } : current,
+        current ? { ...current, theme_settings: saved, pingDisplayMigration: false } : current,
       );
       writeSiteThemeBackup(saved);
     }
@@ -248,13 +270,16 @@ async function runSync() {
     if (sameJson(getAllPingLineOverrides(), localLineOverrides)) clearPingLineOverrides();
     if (editSeq === seq) {
       writeSyncPending(false);
+      clearSyncBase();
       setSyncStatus({ phase: "synced", error: null });
+    } else {
+      rememberSyncBase(queryClient.getQueryData<PublicConfig>(["public"]));
     }
   } catch (error) {
-    setSyncStatus({ phase: "error", error });
+    setSyncStatus({ phase: error instanceof ThemeSyncConflictError ? "conflict" : "error", error });
   } finally {
     syncRunning = false;
-    if (syncRerun || editSeq !== seq) {
+    if (syncStatus.phase !== "conflict" && (syncRerun || editSeq !== seq)) {
       syncRerun = false;
       if (syncTimer === undefined) scheduleSync(0);
     }
@@ -272,7 +297,6 @@ async function runSync() {
  *   键名都一样），切回来卡片线路、地区顺序全没了，后端没留任何痕迹；
  * - 后台「应用」主题 / 「保存设置」写回页面打开时读的旧副本，里面是更早的一次同步的时间戳。
  */
-export const SITE_SYNC_MARKER_KEY = "luminaplusSyncedAt";
 const BACKUP_STORAGE_KEY = "cfsm-luminaplus:site-theme-backup:v1";
 const BACKUP_DISMISSED_STORAGE_KEY = "cfsm-luminaplus:site-theme-backup-dismissed:v1";
 /**
@@ -280,11 +304,6 @@ const BACKUP_DISMISSED_STORAGE_KEY = "cfsm-luminaplus:site-theme-backup-dismisse
  * 可能拿到的还是上一次同步的那份（时间戳更旧），会被误认成旧副本写回。
  */
 export const SITE_BACKUP_SETTLE_MS = 3 * 60_000;
-
-function syncMarkerOf(themeOptions: Record<string, unknown> | undefined): number | null {
-  const value = themeOptions?.[SITE_SYNC_MARKER_KEY];
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
 
 /** 键按字母排好再序列化：后端存取之后键的顺序不保证不变，内容一样的两份不该被当成不同。 */
 function stableJson(value: unknown): string {
@@ -423,6 +442,10 @@ export function startSiteThemeAutoSync(): () => void {
   const stopThemeEdits = subscribeLocalThemeSettingsEdits(handleLocalEdit);
   const stopLineEdits = subscribePingLineOverrideEdits(handleLocalEdit);
   if (readSyncPending() && getJwtToken()) {
+    try {
+      const raw = JSON.parse(window.localStorage.getItem(SYNC_BASE_KEY) || "null");
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) syncBase = raw;
+    } catch { /* old versions did not store a baseline */ }
     editSeq += 1;
     scheduleSync(SITE_THEME_SYNC_DEBOUNCE_MS);
   }
@@ -456,8 +479,23 @@ export function hasUnsyncedLocalChanges({
 
 /** 失败后手动重试（登录态失效重新登录回来、完成人机验证之后）。 */
 export function retrySiteThemeSync(): void {
+  if (syncStatus.phase === "conflict") return;
   if (!getJwtToken()) return;
   editSeq += 1;
+  scheduleSync(0);
+}
+
+export function resolveSiteThemeConflict(keepMine: boolean): void {
+  if (syncStatus.phase !== "conflict") return;
+  if (!keepMine) {
+    resetLocalThemeSettings();
+    clearPingLineOverrides();
+    cancelSiteThemeSync();
+    return;
+  }
+  allowConflictOnce = true;
+  editSeq += 1;
+  setSyncStatus({ phase: "pending", error: null });
   scheduleSync(0);
 }
 
@@ -468,6 +506,7 @@ export function cancelSiteThemeSync(): void {
   if (syncTimer !== undefined) clearTimeout(syncTimer);
   syncTimer = undefined;
   writeSyncPending(false);
+  clearSyncBase();
   if (!syncRunning) setSyncStatus(IDLE_STATUS);
 }
 
@@ -497,6 +536,8 @@ export function resetSiteThemeSyncForTest(): void {
   syncRunning = false;
   syncRerun = false;
   editSeq = 0;
+  allowConflictOnce = false;
+  clearSyncBase();
   syncStatus = IDLE_STATUS;
   writeSyncPending(false);
 }

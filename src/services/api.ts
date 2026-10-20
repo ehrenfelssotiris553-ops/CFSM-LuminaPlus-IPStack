@@ -1,3 +1,4 @@
+import { migratePingDisplaySettings } from "@/utils/pingVisibility";
 import { z } from "zod";
 import {
   CfsmServerSchema,
@@ -39,6 +40,7 @@ import {
 import { seedMeasuredHistory } from "@/services/pingLiveStore";
 import { applySiteLanguage } from "@/i18n";
 import { resolvePreferredAppearance } from "@/utils/themeSettings";
+import { themeSyncMarkerOf } from "@/utils/themeMeta";
 
 export { ApiRequestError, DatabaseUpgradeRequiredError } from "@/services/cfsm/http";
 
@@ -106,6 +108,13 @@ let recentThemeOptionsWrite: { at: number; themeOptions: Record<string, unknown>
 
 function resolveThemeOptions(fetched: Record<string, unknown>): Record<string, unknown> {
   if (!recentThemeOptionsWrite) return fetched;
+  const fetchedAt = themeSyncMarkerOf(fetched);
+  const savedAt = themeSyncMarkerOf(recentThemeOptionsWrite.themeOptions);
+  if (fetchedAt != null && savedAt != null && fetchedAt > savedAt) {
+    // A newer device save is not a stale Worker cache. Keep it over subsequent older responses too.
+    recentThemeOptionsWrite = { at: Date.now(), themeOptions: fetched };
+    return fetched;
+  }
   if (Date.now() - recentThemeOptionsWrite.at > THEME_OPTIONS_WRITE_TRUST_MS) {
     recentThemeOptionsWrite = null;
     return fetched;
@@ -162,6 +171,14 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
   const config = await getSiteConfig(options);
   // 内容要等配置到手才渲染（AppShell 先只显示加载圈），在这里定语言，页面一出来就是对的语言。
   applySiteLanguage(config.default_language);
+  const carrierNames = resolveCarrierNames({
+    ct: config.custom_ct_name, cu: config.custom_cu_name, cm: config.custom_cm_name, bd: config.custom_bd_name,
+    node_1: config.node_1_name, node_2: config.node_2_name, node_3: config.node_3_name, node_4: config.node_4_name,
+  });
+  const rawThemeOptions = resolveThemeOptions(config.theme_options);
+  const themeOptions = migratePingDisplaySettings(rawThemeOptions, Object.fromEntries(
+    CARRIER_TASKS.map(({ id, key }) => [String(id), carrierNames[key]]),
+  ));
   return {
     sitename: config.site_title,
     description: "",
@@ -173,22 +190,14 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
     turnstile_site_key: config.turnstile_site_key,
     verified: config.verified,
     // 站点级的主题设置（本机覆盖叠在它上面）。刚保存过就先信自己写进去的，见 THEME_OPTIONS_WRITE_TRUST_MS。
-    theme_settings: resolveThemeOptions(config.theme_options),
+    theme_settings: themeOptions,
+    pingDisplayMigration: rawThemeOptions.pingDisplayVersion !== 1,
     latencyWindow: config.latency_window,
     frontendWsTimeoutMinutes: config.frontend_ws_timeout_minutes,
     preferredAppearance: resolvePreferredAppearance(config.preferred_theme),
     // 线路名可由站长在后端改；老后端不下发这几个字段，逐条回退到主题默认名。
     // 后四条（2.8.5 Beta4 新增）的键名风格和前四条不一样，是 node_N_name。
-    carrierNames: resolveCarrierNames({
-      ct: config.custom_ct_name,
-      cu: config.custom_cu_name,
-      cm: config.custom_cm_name,
-      bd: config.custom_bd_name,
-      node_1: config.node_1_name,
-      node_2: config.node_2_name,
-      node_3: config.node_3_name,
-      node_4: config.node_4_name,
-    }),
+    carrierNames,
     sys: {
       show_price: true,
       show_expire: true,

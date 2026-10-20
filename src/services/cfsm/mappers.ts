@@ -26,6 +26,7 @@ const GIB = 1024 * 1024 * 1024;
 
 /** 与后端 `/api/servers` 聚合统计一致的在线判定阈值。 */
 export const ONLINE_THRESHOLD_MS = 300_000;
+export const MAX_FUTURE_CLOCK_SKEW_MS = 60_000;
 
 /**
  * 各条线路的默认显示名。站长可以在后端改名（`/api/config` 的 `custom_ct_name`、`node_1_name` 等，
@@ -297,7 +298,7 @@ export function parsePrice(value: unknown): number {
 /**
  * 在线 = 后端最近 5 分钟内收到过这台的上报。
  *
- * `report_timestamp`（后端收到上报的时刻）和样本时间 `last_updated` 哪个新用哪个。样本时间是探针按节点自己的时钟打的：
+ * 在可信的时间中取较新的一个。超过一分钟的未来样本不能证明在线。
  * 站长 2026-10-10 有一台时钟慢了 321 秒，数据每 2 秒在更新，只看样本时间却永远「超过 5 分钟没上报」，卡片一直显示掉线，
  * 而内置主题（`report_timestamp ?? last_updated`）显示在线。
  *
@@ -306,10 +307,10 @@ export function parsePrice(value: unknown): number {
  */
 export function isServerOnline(server: CfsmServer, now = Date.now()): boolean {
   if (typeof server.is_online === "boolean") return server.is_online;
-  const lastSeen = Math.max(
+  const lastSeen = Math.max(0, ...[
     normalizeTimestamp(server.report_timestamp ?? 0),
     normalizeTimestamp(server.last_updated || server.timestamp),
-  );
+  ].filter((time) => time <= now + MAX_FUTURE_CLOCK_SKEW_MS));
   return lastSeen > 0 && now - lastSeen < ONLINE_THRESHOLD_MS;
 }
 

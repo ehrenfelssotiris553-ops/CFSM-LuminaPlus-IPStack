@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { WsSample } from "@/services/cfsm/wsClient";
 import { CfsmServerSchema, EMPTY_CARRIER_PING } from "@/types/cfsm";
 
 /**
@@ -11,6 +12,7 @@ import { CfsmServerSchema, EMPTY_CARRIER_PING } from "@/types/cfsm";
 
 interface FakeConnection {
   ids: string[];
+  emitSamples(samples: WsSample[]): void;
   closed: boolean;
   close(): void;
   updateIds(ids: string[]): void;
@@ -28,10 +30,11 @@ vi.mock("@/services/cfsm/wsClient", () => ({
   createWsConnection: (
     _base: string,
     ids: string[],
-    handlers: { onAvailabilityChange(available: boolean): void },
+    handlers: { onAvailabilityChange(available: boolean): void; onBatch(samples: WsSample[]): void },
   ) => {
     const connection: FakeConnection = {
       ids: [...ids],
+      emitSamples: (samples) => handlers.onBatch(samples),
       closed: false,
       close() {
         connection.closed = true;
@@ -477,5 +480,27 @@ describe("resolveRealtimeSessionLimitMs", () => {
     expect(resolveRealtimeSessionLimitMs(20)).toBe(20 * 60_000);
     expect(resolveRealtimeSessionLimitMs("30")).toBe(30 * 60_000);
     expect(resolveRealtimeSessionLimitMs(5000)).toBe(1440 * 60_000);
+  });
+});
+
+
+describe("clock correction playback", () => {
+  it("accepts corrected-time samples after a future clock sample was shown", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => {
+      const value = snapshot();
+      value.servers[0]!.last_updated = Date.now() + 1800000;
+      return value;
+    });
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getNodeMetricsSnapshot("node-a")?.updatedAt).toBeGreaterThan(Date.now() + 60000);
+    const corrected = Date.now();
+    mocks.connections[0]!.emitSamples([{ serverId: "node-a", ts: corrected, reportTs: corrected, data: { cpu: 17 } }]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(store.getNodeMetricsSnapshot("node-a")?.cpuPct).toBe(17);
+    expect(store.getNodeMetricsSnapshot("node-a")?.updatedAt).toBe(corrected);
+    expect(store.getNodeMetricsSnapshot("node-a")?.online).toBe(true);
+    release();
   });
 });

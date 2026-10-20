@@ -1,0 +1,23 @@
+{
+  "node": "24.19.0",
+  "package": "1.2.21+ipstack.4",
+  "test_files_passed": 58,
+  "tests_passed": 654,
+  "lint": "passed",
+  "typescript": "passed",
+  "production_build": "passed",
+  "audit_after": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "browser_checks_passed": 12,
+  "bug_review": "docs/BUG-REVIEW-2026-10-20.md",
+  "ping_visibility_review": "docs/PING-VISIBILITY.md",
+  "theme_optimization": "docs/THEME-OPTIMIZATION.md",
+  "clean_build_matches_browser_tested_bytes": true,
+  "dependency_versions_changed": false
+}

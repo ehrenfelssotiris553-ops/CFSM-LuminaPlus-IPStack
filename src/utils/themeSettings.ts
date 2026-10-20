@@ -1,4 +1,14 @@
+import { applyPingVisibilityEdits, LOCAL_PING_VISIBILITY_EDITS_KEY, LOCAL_PING_GROUP_EDITS_KEY, LOCAL_PING_PROTOCOL_EDITS_KEY, mergePingVisibilityEdits, normalizePingVisibilityEdits, normalizePingVisibility, normalizePingProtocols, type PingProtocols, type PingVisibilityOverrides } from "@/utils/pingVisibility";
 import type { ThemeSettings } from "@/types/cfsm";
+import {
+  applyIpStackEdits,
+  LOCAL_IP_STACK_EDITS_KEY,
+  mergeIpStackEdits,
+  normalizeIpStackEdits,
+  normalizeIpStackOverrides,
+  type IpStackOverridesByNode,
+} from "@/utils/ipStack";
+
 import { DEFAULT_SURFACE_OPACITY, normalizeSurfaceOpacity } from "@/utils/background";
 import {
   DEFAULT_COST_RATE_API_URL,
@@ -34,6 +44,63 @@ import {
   type PingLineOverridesByNode,
 } from "@/utils/pingLineOverrides";
 
+/** Apply only the edited node/protocol to fresh backend values; local bookkeeping stays local. */
+export function mergeThemeSettingsLayers(
+  site: Record<string, unknown> | null | undefined,
+  local: Record<string, unknown>,
+  draft?: ThemeSettings,
+): Record<string, unknown> {
+  const merged = { ...site, ...local };
+  if (Object.hasOwn(local, LOCAL_IP_STACK_EDITS_KEY)) {
+    merged.homepageIpStackOverrides = applyIpStackEdits(
+      normalizeIpStackOverrides(merged.homepageIpStackOverrides),
+      normalizeIpStackEdits(local[LOCAL_IP_STACK_EDITS_KEY]),
+    );
+  }
+  if (Object.hasOwn(local, LOCAL_PING_VISIBILITY_EDITS_KEY)) {
+    merged.homepagePingVisibilityOverrides = applyPingVisibilityEdits(
+      normalizePingVisibility(merged.homepagePingVisibilityOverrides),
+      normalizePingVisibilityEdits(local[LOCAL_PING_VISIBILITY_EDITS_KEY]),
+    );
+  }
+  delete merged[LOCAL_PING_VISIBILITY_EDITS_KEY];
+  if (Object.hasOwn(local, LOCAL_PING_GROUP_EDITS_KEY)) {
+    merged.homepagePingGroupOverrides = applyIpStackEdits(normalizeIpStackOverrides(merged.homepagePingGroupOverrides), normalizeIpStackEdits(local[LOCAL_PING_GROUP_EDITS_KEY]));
+  }
+  if (Object.hasOwn(local, LOCAL_PING_PROTOCOL_EDITS_KEY)) {
+    merged.homepagePingProtocols = { ...normalizePingProtocols(merged.homepagePingProtocols), ...normalizePingProtocols(local[LOCAL_PING_PROTOCOL_EDITS_KEY]) };
+  }
+  delete merged[LOCAL_PING_GROUP_EDITS_KEY];
+  delete merged[LOCAL_PING_PROTOCOL_EDITS_KEY];
+  delete merged[LOCAL_IP_STACK_EDITS_KEY];
+  return { ...merged, ...draft };
+}
+
+export function mergeLocalThemeSettingsEdits(
+  current: Record<string, unknown>,
+  edits: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...current, ...edits };
+  if (Object.hasOwn(edits, LOCAL_IP_STACK_EDITS_KEY)) {
+    merged[LOCAL_IP_STACK_EDITS_KEY] = mergeIpStackEdits(
+      normalizeIpStackEdits(current[LOCAL_IP_STACK_EDITS_KEY]),
+      normalizeIpStackEdits(edits[LOCAL_IP_STACK_EDITS_KEY]),
+    );
+  }
+  if (Object.hasOwn(edits, LOCAL_PING_VISIBILITY_EDITS_KEY)) {
+    merged[LOCAL_PING_VISIBILITY_EDITS_KEY] = mergePingVisibilityEdits(
+      normalizePingVisibilityEdits(current[LOCAL_PING_VISIBILITY_EDITS_KEY]),
+      normalizePingVisibilityEdits(edits[LOCAL_PING_VISIBILITY_EDITS_KEY]),
+    );
+  }
+  if (Object.hasOwn(edits, LOCAL_PING_GROUP_EDITS_KEY)) {
+    merged[LOCAL_PING_GROUP_EDITS_KEY] = mergeIpStackEdits(normalizeIpStackEdits(current[LOCAL_PING_GROUP_EDITS_KEY]), normalizeIpStackEdits(edits[LOCAL_PING_GROUP_EDITS_KEY]));
+  }
+  if (Object.hasOwn(edits, LOCAL_PING_PROTOCOL_EDITS_KEY)) {
+    merged[LOCAL_PING_PROTOCOL_EDITS_KEY] = { ...normalizePingProtocols(current[LOCAL_PING_PROTOCOL_EDITS_KEY]), ...normalizePingProtocols(edits[LOCAL_PING_PROTOCOL_EDITS_KEY]) };
+  }
+  return merged;
+}
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
 
@@ -58,6 +125,15 @@ export interface ResolvedThemeSettings {
   showRegionBar: boolean;
   showCardGroup: boolean;
   showCardPrice: boolean;
+  showIpv4: boolean;
+  showIpv6: boolean;
+  homepageIpStackOverrides: IpStackOverridesByNode;
+  homepagePingVisibilityOverrides: PingVisibilityOverrides;
+  pingDisplayVersion: 1;
+  showPingIpv4: boolean;
+  showPingIpv6: boolean;
+  homepagePingGroupOverrides: IpStackOverridesByNode;
+  homepagePingProtocols: PingProtocols;
   homeGroupOrder: string[];
   /** 地区栏顺序：在首页拖动地区标签得到（见 mergeHomeRegionOrder）。空 = 按默认地理优先级。 */
   homeRegionOrder: string[];
@@ -109,6 +185,15 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showRegionBar: true,
   showCardGroup: true,
   showCardPrice: true,
+  showIpv4: true,
+  showIpv6: true,
+  homepageIpStackOverrides: {},
+  homepagePingVisibilityOverrides: {},
+  pingDisplayVersion: 1,
+  showPingIpv4: true,
+  showPingIpv6: true,
+  homepagePingGroupOverrides: {},
+  homepagePingProtocols: {},
   homeGroupOrder: [],
   homeRegionOrder: [],
   homeDefaultGroup: "",
@@ -270,6 +355,15 @@ export function normalizeThemeSettings(
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
     showCardGroup: enabledUnlessFalse(settings?.showCardGroup),
     showCardPrice: enabledUnlessFalse(settings?.showCardPrice),
+    showIpv4: enabledUnlessFalse(settings?.showIpv4),
+    showIpv6: enabledUnlessFalse(settings?.showIpv6),
+    homepageIpStackOverrides: normalizeIpStackOverrides(settings?.homepageIpStackOverrides),
+    homepagePingVisibilityOverrides: normalizePingVisibility(settings?.homepagePingVisibilityOverrides),
+    pingDisplayVersion: 1,
+    showPingIpv4: enabledUnlessFalse(settings?.showPingIpv4),
+    showPingIpv6: enabledUnlessFalse(settings?.showPingIpv6),
+    homepagePingGroupOverrides: normalizeIpStackOverrides(settings?.homepagePingGroupOverrides),
+    homepagePingProtocols: normalizePingProtocols(settings?.homepagePingProtocols),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     homeRegionOrder: normalizeHomeRegionOrder(settings?.homeRegionOrder),
     homeDefaultGroup: normalizeHomeDefaultGroup(settings?.homeDefaultGroup),

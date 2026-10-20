@@ -404,7 +404,7 @@ export async function getExchangeRates(
   try {
     const response = await fetchWithTimeout(
       rateApiUrl,
-      { cache: "no-store", signal: options.signal },
+      { cache: "no-store", signal: options.signal, credentials: "omit", referrerPolicy: "no-referrer" },
       RATE_REQUEST_TIMEOUT_MS,
     );
     if (!response.ok) {

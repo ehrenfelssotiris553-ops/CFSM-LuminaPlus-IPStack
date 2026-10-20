@@ -6,7 +6,7 @@
  * 写法哪天变了宁可漏报，也不能让站长天天看见一个假的「有新版」。
  */
 
-const VERSION_PATTERN = /^v?(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc)[\s._-]*(\d+)?)?$/i;
+const VERSION_PATTERN = /^v?(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc)[\s._-]*(\d+)?)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i;
 const CHANNEL_RANK: Record<string, number> = { alpha: 0, beta: 1, rc: 2 };
 const RELEASE_RANK = 3;
 

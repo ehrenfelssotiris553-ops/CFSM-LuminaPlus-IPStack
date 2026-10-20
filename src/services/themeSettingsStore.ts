@@ -93,7 +93,7 @@ function emit() {
 // 另一个标签页改了设置时同步过来，避免多标签页之间状态打架。
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEY) return;
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
     cache = null;
     emit();
   });

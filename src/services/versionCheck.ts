@@ -22,7 +22,7 @@ const LATEST_THEME_TIMEOUT_MS = 8_000;
 /** `LuminaPlus v1.2.15` → `1.2.15`；读不出返回 null。 */
 export function parseThemeVersionMeta(content: unknown): string | null {
   if (typeof content !== "string") return null;
-  const match = content.trim().match(/v?(\d+(?:\.\d+)+)$/i);
+  const match = content.trim().match(/v?(\d+(?:\.\d+)+(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?)$/i);
   return match ? match[1]! : null;
 }
 
@@ -81,7 +81,7 @@ export async function fetchLatestThemeVersion(now = Date.now()): Promise<string 
   try {
     const response = await fetchWithTimeout(
       THEME_RELEASE_INDEX_URL,
-      { cache: "no-store" },
+      { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" },
       LATEST_THEME_TIMEOUT_MS,
     );
     if (response.ok) version = extractThemeVersionFromHtml(await response.text());

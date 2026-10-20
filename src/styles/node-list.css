@@ -172,6 +172,13 @@
   overflow: hidden;
 }
 
+.node-list-chips .ip-stack-badge {
+  height: 18px;
+  padding: 0 0.375rem;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
 /* 列表档标签比卡片略小,一行密集排列更耐看。 */
 .node-list-chips .dstatus-tag-chip,
 .node-list-chips .dstatus-price-chip {

@@ -493,6 +493,17 @@ export interface ThemeSettings {
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
   showCardGroup?: boolean;
+  showIpv4?: boolean;
+  showIpv6?: boolean;
+  /** Per-node homepage badge overrides: absent = automatic, true = show, false = hide. */
+  homepageIpStackOverrides?: Record<string, { ipv4?: boolean; ipv6?: boolean }>;
+  /** Per-node, stable task ID visibility; absent inherits V4/V6 display rules. */
+  homepagePingVisibilityOverrides?: Record<string, Record<string, boolean>>;
+  pingDisplayVersion?: 1;
+  showPingIpv4?: boolean;
+  showPingIpv6?: boolean;
+  homepagePingGroupOverrides?: Record<string, { ipv4?: boolean; ipv6?: boolean }>;
+  homepagePingProtocols?: Record<string, "ipv4" | "ipv6" | "other">;
   homeGroupOrder?: string[];
   /** 首页地区栏的顺序（地区代码），在首页直接拖动得到；没列进去的按默认规则排在后面。 */
   homeRegionOrder?: string[];
@@ -644,6 +655,8 @@ export interface HomepagePingLine extends PingOverviewItem {
 }
 
 export interface HomepagePingDisplayLine extends HomepagePingLine {
+  /** Original unfiltered row position for the line switcher. */
+  slot?: number;
   buckets: PingOverviewBucket[];
 }
 
@@ -685,6 +698,8 @@ export interface PublicConfig {
   turnstile_site_key: string;
   verified: boolean;
   theme_settings: Record<string, unknown>;
+  /** Legacy display rules were resolved; an administrator should persist them once. */
+  pingDisplayMigration?: boolean;
   sys: SysConfig;
   /** 后端下发的首页延迟窗口口径；缺席时前端从数据自推跨度。见 `SiteConfigSchema.latency_window`。 */
   latencyWindow?: { points?: number; hours?: number };

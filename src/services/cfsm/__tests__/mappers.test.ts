@@ -561,3 +561,16 @@ describe("inferIntervalSeconds", () => {
     expect(inferIntervalSeconds([1000])).toBeUndefined();
   });
 });
+
+
+describe("future clock protection", () => {
+  it("ignores a future sample when CF has not received reports for ten minutes", () => {
+    const future = server({ last_updated: NOW + 1800000, report_timestamp: NOW - 600000 });
+    expect(isServerOnline(future, NOW)).toBe(false);
+    expect(isServerOnline({ ...future, report_timestamp: NOW - 2000 }, NOW)).toBe(true);
+  });
+  it("still accepts a recent sample when another timestamp is invalid", () => {
+    expect(isServerOnline(server({ last_updated: NOW - 1000, report_timestamp: NOW + 1800000 }), NOW)).toBe(true);
+    expect(isServerOnline(server({ last_updated: NOW + 1800000, report_timestamp: 0 }), NOW)).toBe(false);
+  });
+});

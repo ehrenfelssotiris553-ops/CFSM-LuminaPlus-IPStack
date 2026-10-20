@@ -21,6 +21,12 @@ afterEach(() => {
 });
 
 describe("themeSettingsStore", () => {
+  it("reloads settings when another tab clears all local storage", () => {
+    saveLocalThemeSettings({ showIpv4: false });
+    window.localStorage.clear();
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    expect(getLocalThemeSettings()).toEqual({});
+  });
   it("persists settings across a page reload", async () => {
     saveLocalThemeSettings({ defaultAppearance: "dark", desktopNodeViewMode: "compact" });
     expect(window.localStorage.getItem(STORAGE_KEY)).toContain("dark");

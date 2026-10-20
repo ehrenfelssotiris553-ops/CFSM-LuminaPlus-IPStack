@@ -155,7 +155,7 @@ describe("getPublic", () => {
 
     expect(config.sitename).toBe("My Monitor");
     expect(config.private_site).toBe(true);
-    expect(config.theme_settings).toEqual({ showConnections: false });
+    expect(config.theme_settings).toMatchObject({ showConnections: false, pingDisplayVersion: 1 });
     expect(config.sys.long_history_points).toBe(180);
   });
 
@@ -282,6 +282,17 @@ describe("resolveMe", () => {
 });
 
 describe("saveThemeOptions", () => {
+  it("accepts a newer device snapshot during the cache-protection window and rejects older ones", async () => {
+    const now = Date.now();
+    let fetched = { luminaplusSyncedAt: now + 1000, showIpv4: false, showIpv6: false };
+    fetchMock.mockImplementation(async (url: string) => String(url).includes("/api/theme_options")
+      ? jsonResponse({ success: true, theme_options: { luminaplusSyncedAt: now, showIpv4: true } })
+      : jsonResponse({ site_title: "S", theme_options: fetched }));
+    await saveThemeOptions({ luminaplusSyncedAt: now, showIpv4: true });
+    expect((await getPublic()).theme_settings).toMatchObject(fetched);
+    fetched = { luminaplusSyncedAt: now - 1000, showIpv4: true, showIpv6: true };
+    expect((await getPublic()).theme_settings).toMatchObject({ luminaplusSyncedAt: now + 1000, showIpv4: false, showIpv6: false });
+  });
   it("POSTs { theme_options } as JSON with the admin bearer + turnstile headers", async () => {
     window.localStorage.setItem("jwt_token", "token");
     window.localStorage.setItem("turnstile_verified", "cached-cred");
@@ -313,10 +324,10 @@ describe("saveThemeOptions", () => {
     const savedAt = Date.now();
 
     await saveThemeOptions({ accent: "green" });
-    expect((await getPublic()).theme_settings).toEqual({ accent: "green" });
+    expect((await getPublic()).theme_settings).toMatchObject({ accent: "green" });
 
     vi.spyOn(Date, "now").mockReturnValue(savedAt + 3 * 60_000);
-    expect((await getPublic()).theme_settings).toEqual({ accent: "stale" });
+    expect((await getPublic()).theme_settings).toMatchObject({ accent: "stale" });
   });
 
   it("drops the expired token on 401 (writes have no anonymous fallback)", async () => {

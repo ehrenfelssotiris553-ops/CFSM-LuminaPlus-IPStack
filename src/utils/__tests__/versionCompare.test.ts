@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { compareVersions, formatVersionLabel, isNewerVersion } from "@/utils/versionCompare";
 
 describe("compareVersions", () => {
+  it("ignores customization build metadata when checking upstream versions", () => {
+    expect(compareVersions("1.2.21+ipstack.1", "1.2.21")).toBe(0);
+    expect(isNewerVersion("1.2.22", "1.2.21+ipstack.1")).toBe(true);
+  });
   it("compares numeric segments, padding the shorter one with zeros", () => {
     expect(compareVersions("1.2.15", "1.2.9")).toBeGreaterThan(0);
     expect(compareVersions("1.2", "1.2.0")).toBe(0);

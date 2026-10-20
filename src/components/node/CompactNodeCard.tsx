@@ -1,3 +1,4 @@
+import { NodeClockWarning } from "./NodeClockWarning";
 import { t } from "@/i18n";
 import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -397,8 +398,8 @@ function CompactNodeChips({
 }: {
   subtitle: string;
   tags: CompactTag[];
-  ipv4?: string | null;
-  ipv6?: string | null;
+  ipv4: boolean;
+  ipv6: boolean;
 }) {
   // 完整 tag 列表挂在 lane 的 tooltip 上;chip 不带自己的 title,hover 会穿透到 lane 上 ——
   // 被裁剪 lane 折行挤出去的 tag 就靠这个保持可见,不用显示"+N"角标。
@@ -750,7 +751,8 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         node={node}
         osName={osName}
       />
-      <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
+      <NodeClockWarning sampleAt={model.node.updatedAt} />
+      <CompactNodeChips subtitle={subtitle} tags={footerTags} {...model.ipStack} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />
       <CompactNodeInfoStrip
         node={node}
@@ -765,7 +767,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         renewalPrice={renewalPrice}
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
-      {homepagePingLines.length > 0 ? (
+      {model.showHomepagePing && (homepagePingLines.length > 0 ? (
         <MultiPingStatus
           uuid={uuid}
           lines={homepagePingLines}
@@ -782,7 +784,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
           pingLoading={pingLoading}
           pingError={pingError}
         />
-      )}
+      ))}
     </article>
   );
 });

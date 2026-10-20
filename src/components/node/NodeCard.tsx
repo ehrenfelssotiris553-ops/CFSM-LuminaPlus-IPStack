@@ -1,3 +1,4 @@
+import { NodeClockWarning } from "./NodeClockWarning";
 import { t } from "@/i18n";
 import { memo, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -39,6 +40,7 @@ import {
   TRAFFIC_SLIVER_RATIO,
 } from "./nodeCardShared";
 import { IpStackBadges } from "./IpStackBadges";
+import type { IpStackVisibility } from "@/utils/ipStack";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { MultiPingStatus } from "./MultiPingStatus";
 import { formatHealthBucketTooltip } from "./pingBucketText";
@@ -74,6 +76,7 @@ export const NodeCard = memo(function NodeCard({
 
   const {
     node,
+    ipStack,
     traffic,
     trafficTrend,
     ping,
@@ -110,10 +113,12 @@ export const NodeCard = memo(function NodeCard({
       <div className="server-card-content">
         <NodeCardHeader
           node={node}
+          ipStack={ipStack}
           subtitle={subtitle}
           osName={osName}
         />
 
+        <NodeClockWarning sampleAt={model.node.updatedAt} />
         <div className="server-card-stack">
           <NodeMetricSection
             node={node}
@@ -154,7 +159,7 @@ export const NodeCard = memo(function NodeCard({
             </div>
           )}
 
-          {homepagePingLines.length > 0 ? (
+          {model.showHomepagePing && (homepagePingLines.length > 0 ? (
             <MultiPingStatus
               uuid={uuid}
               lines={homepagePingLines}
@@ -173,7 +178,7 @@ export const NodeCard = memo(function NodeCard({
               latencyColor={latencyColor}
               lossColor={lossColor}
             />
-          )}
+          ))}
         </div>
 
         <NodeCardFooter
@@ -190,10 +195,12 @@ export const NodeCard = memo(function NodeCard({
 
 function NodeCardHeader({
   node,
+  ipStack,
   subtitle,
   osName,
 }: {
   node: NodeCardNode;
+  ipStack: IpStackVisibility;
   subtitle: string;
   osName: string;
 }) {
@@ -211,14 +218,14 @@ function NodeCardHeader({
             {node.name}
           </Link>
         </div>
-        {(subtitle || node.ipv4 || node.ipv6) && (
+        {(subtitle || ipStack.ipv4 || ipStack.ipv6) && (
           <div className="server-card-subtitle-row">
             {subtitle && (
               <span className="server-card-subtitle" title={subtitle}>
                 {subtitle}
               </span>
             )}
-            <IpStackBadges ipv4={node.ipv4} ipv6={node.ipv6} />
+            <IpStackBadges {...ipStack} />
           </div>
         )}
       </div>

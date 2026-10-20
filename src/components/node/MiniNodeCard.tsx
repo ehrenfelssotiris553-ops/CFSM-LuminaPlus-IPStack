@@ -1,3 +1,4 @@
+import { NodeClockWarning } from "./NodeClockWarning";
 import { t } from "@/i18n";
 import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -75,8 +76,8 @@ function MiniChips({
 }: {
   tags: MiniTag[];
   renewalPrice: string | null;
-  ipv4?: string | null;
-  ipv6?: string | null;
+  ipv4: boolean;
+  ipv6: boolean;
 }) {
   if (!renewalPrice && tags.length === 0 && !ipv4 && !ipv6) return null;
   const tagTitle = joinTagTitle(tags);
@@ -361,7 +362,7 @@ function MiniHealthBars({
   );
 }
 
-// 延迟/丢包必显；mini 使用内联 SVG，避免每张卡创建 Canvas 与观察器。
+// mini 使用内联 SVG，避免每张卡创建 Canvas 与观察器；显示由共享模型控制。
 const MiniHealth = memo(function MiniHealth({
   ping,
   pingBuckets,
@@ -473,10 +474,11 @@ export const MiniNodeCard = memo(function MiniNodeCard({
         node={node}
         osName={osName}
       />
-      <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
+      <NodeClockWarning sampleAt={model.node.updatedAt} />
+      <MiniChips tags={footerTags} renewalPrice={renewalPrice} {...model.ipStack} />
       <MiniVitals node={node} loadFraction={loadFraction} />
       <MiniFlow node={node} upRate={upRate} downRate={downRate} />
-      <MiniHealth
+      {model.showHomepagePing && <MiniHealth
         ping={ping}
         pingBuckets={pingBuckets}
         latencyColor={latencyColor}
@@ -484,7 +486,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({
         hasRealHomepagePingBinding={hasRealHomepagePingBinding}
         pingLoading={pingLoading}
         pingError={pingError}
-      />
+      />}
     </article>
   );
 });

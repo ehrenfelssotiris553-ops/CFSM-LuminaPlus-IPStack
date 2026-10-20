@@ -1,3 +1,4 @@
+import { NodeClockWarning } from "./NodeClockWarning";
 import { t } from "@/i18n";
 import { memo, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,6 +14,7 @@ import { speedRateColor } from "@/utils/metricTone";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
+import { IpStackBadges } from "./IpStackBadges";
 import { formatOsLabel, joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import type { PingOverviewTaskLoadState } from "@/types/cfsm";
@@ -273,7 +275,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     `${t("traffic.upload")} ${upRate.value}${upRate.unit}`,
     `${t("traffic.download")} ${downRate.value}${downRate.unit}`,
     t("list.ariaTrafficUsed", { value: usedPct }),
-    t("list.netLatencyAria", { status: listPingStatus.ariaText }),
+    ...(model.showHomepagePing ? [t("list.netLatencyAria", { status: listPingStatus.ariaText })] : []),
     node.online === true
       ? t("status.online")
       : node.online === false
@@ -299,7 +301,8 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
               {node.name}
             </span>
           </div>
-          {(renewalPrice || footerTags.length > 0) && (
+          <NodeClockWarning sampleAt={model.node.updatedAt} />
+          {(renewalPrice || footerTags.length > 0 || model.ipStack.ipv4 || model.ipStack.ipv6) && (
             <div className="node-list-chips" title={footerTags.length > 0 ? joinTagTitle(footerTags) : undefined}>
               {renewalPrice && (
                 <span className="dstatus-price-chip">
@@ -307,6 +310,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
                   {renewalPrice}
                 </span>
               )}
+              <IpStackBadges {...model.ipStack} />
               {footerTags.map((tag, index) => (
                 <span
                   key={`${tag.label}-${index}`}
@@ -378,7 +382,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
       </div>
 
       <div className="node-list-cell col-net">
-        <ListLatency
+        {model.showHomepagePing && <ListLatency
           latency={ping.lastValue}
           loadState={ping.loadState}
           hasRealHomepagePingBinding={hasRealHomepagePingBinding}
@@ -386,7 +390,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
           latencyColor={latencyColor}
           buckets={pingBuckets}
           redrawKey={redrawKey}
-        />
+        />}
       </div>
 
       <div className="node-list-cell col-life node-list-stack">

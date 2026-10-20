@@ -1,0 +1,18 @@
+{
+  "browser": "153.0.8010.0",
+  "checks": [
+    "legacy migration preserves hidden V6 rows; changing a badge subsequently does not change latency",
+    "mobile VPS accordions and line > node group > site default precedence work independently per node",
+    "unselected lines are explicitly labeled and global enable entry adds a real homepage row",
+    "reset clears group and line overrides; visitors never write backend settings",
+    "all four layouts hide selected ping without fallback while leaving independent V4/V6 badges visible",
+    "future node time shows a warning and cannot keep a silent node online in any layout",
+    "authenticated legacy migration persists once; renaming lines and reloading does not change stored protocol or repeat migration",
+    "explicit protocol editor can classify a line as Other, independently of names and V6 group hiding",
+    "conflicts and local edits survive reload without silently writing",
+    "observed overlapping edits pause autosave; keep-mine saves the edits while preserving other nodes",
+    "use-backend conflict resolution discards local conflict without another write and refreshes the editor",
+    "no new homepage HTTP polling, no history requests, and no credentials forwarded to third-party assets"
+  ],
+  "allPassed": true
+}

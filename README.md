@@ -1,5 +1,13 @@
 # CFSM-Theme-LuminaPlus
 
+> **IPv4 / IPv6 独立显示定制版：v1.2.21+ipstack.2**
+>
+> 新增「主题设置 → 卡片 → 首页 V4 / V6 标签」：两个全局开关，以及每台 VPS 各自的 IPv4 / IPv6 自动、显示、隐藏选项。
+> 大卡片、小卡片、迷你、列表均支持；保留旧配置的默认行为。同步修补本次依赖扫描发现的已知漏洞。
+>
+> 定制功能与安装方法见 [使用说明](docs/IP-STACK.md)，审查范围、证据和限制见 [安全审查](docs/SECURITY-REVIEW-2026-10-20.md)。
+> **下文原作者的安装地址会安装原版。安装本定制版需把本包构建产物放进自己的 GitHub 仓库，并使用自己的主题地址。**
+
 [CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor) 的第三方主题，
 由 [Komari-Theme-LuminaPlus](https://github.com/shanyang242/Komari-Theme-LuminaPlus) 移植而来。
 

@@ -1,3 +1,4 @@
+import { getLocalThemeSettings, saveLocalThemeSettings } from "@/services/themeSettingsStore";
 import { memoByLanguage, t } from "@/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -7,6 +8,7 @@ import {
   checkSiteThemeBackup,
   dismissSiteThemeBackup,
   restoreSiteThemeBackup,
+  resolveSiteThemeConflict,
   retrySiteThemeSync,
   startSiteThemeAutoSync,
   useCanSyncSiteTheme,
@@ -14,6 +16,8 @@ import {
   type SiteThemeBackupCheck,
 } from "@/hooks/useSiteThemeOptions";
 import { ApiRequestError } from "@/services/cfsm/http";
+import { mergeThemeSettingsLayers, normalizeThemeSettings } from "@/utils/themeSettings";
+import { migrateLocalPingPreferences } from "@/utils/pingVisibility";
 
 function describeSyncError(error: unknown): string {
   const status = error instanceof ApiRequestError ? error.status : 0;
@@ -77,6 +81,27 @@ export function SiteThemeSyncNotice() {
   const [restoreError, setRestoreError] = useState<string | null>(null);
 
   useEffect(() => startSiteThemeAutoSync(), []);
+  const migrated = useRef(false);
+  useEffect(() => {
+    if (migrated.current || !config?.pingDisplayMigration) return;
+    const original = getLocalThemeSettings();
+    const local = migrateLocalPingPreferences(original);
+    if (!canSyncSiteTheme) {
+      if (Object.keys(original).length > 0 && local !== original) saveLocalThemeSettings(local);
+      return;
+    }
+    migrated.current = true;
+    const value = normalizeThemeSettings(mergeThemeSettingsLayers(config.theme_settings, local));
+    saveLocalThemeSettings({
+      pingDisplayVersion: 1,
+      showPingIpv4: value.showPingIpv4,
+      showPingIpv6: value.showPingIpv6,
+      homepagePingGroupOverrides: value.homepagePingGroupOverrides,
+      homepagePingProtocols: value.homepagePingProtocols,
+      ...local,
+    });
+  }, [canSyncSiteTheme, config]);
+
 
   // 只给登录站长判；自己的同步在路上时不判（发出去之前后端当然还是旧的）。
   const syncBusy = status.phase === "pending" || status.phase === "saving";
@@ -114,6 +139,16 @@ export function SiteThemeSyncNotice() {
     return () => window.clearTimeout(timer);
   }, [status.phase]);
 
+  if (status.phase === "conflict") {
+    return <section className="realtime-session-prompt site-theme-sync-notice" role="alert" aria-labelledby={titleId}>
+      <CloudAlert size={16} aria-hidden />
+      <div className="realtime-session-prompt-body"><strong id={titleId}>{t("sync.conflictTitle")}</strong><p>{t("sync.conflictBody")}</p></div>
+      <div className="realtime-session-prompt-actions">
+        <button type="button" className="control-button realtime-session-prompt-button" onClick={() => resolveSiteThemeConflict(false)}>{t("sync.useRemote")}</button>
+        <button type="button" className="control-button realtime-session-prompt-button is-primary" onClick={() => resolveSiteThemeConflict(true)}>{t("sync.keepMine")}</button>
+      </div>
+    </section>;
+  }
   if (status.phase !== "error" || status.error === dismissedError) {
     if (canSyncSiteTheme && backupCheck?.overwritten && (!syncBusy || restoring)) {
       return (

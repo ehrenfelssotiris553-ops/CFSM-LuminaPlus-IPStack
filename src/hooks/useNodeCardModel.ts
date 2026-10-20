@@ -12,6 +12,8 @@ import {
   withLiveLatency,
 } from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { isHomepagePingVisible } from "@/utils/pingVisibility";
+import { resolveIpStackVisibility } from "@/utils/ipStack";
 import { carrierTaskName } from "@/services/cfsm/mappers";
 import { useCarrierNames, useLatencyWindowMs } from "@/hooks/usePublicConfig";
 import type { HomepagePingDisplayLine, HomepagePingLine } from "@/types/cfsm";
@@ -60,6 +62,11 @@ export function useNodeCardModel(
   const {
     showCardGroup,
     showCardPrice,
+    showIpv4,
+    showIpv6,
+    homepageIpStackOverrides,
+    homepagePingVisibilityOverrides,
+    showPingIpv4, showPingIpv6, homepagePingGroupOverrides, homepagePingProtocols,
     homepagePingBindings,
     enableHomepageMultiPing,
     homepageMultiPingTaskIds,
@@ -137,7 +144,8 @@ export function useNodeCardModel(
     ) {
       return [];
     }
-    return nodeMultiPingTaskIds.map((taskId) => {
+    return nodeMultiPingTaskIds.flatMap((taskId, slot) => {
+      if (!isHomepagePingVisible(uuid, taskId, { showPingIpv4, showPingIpv6, homepagePingGroupOverrides, homepagePingProtocols, homepagePingVisibilityOverrides })) return [];
       const loaded = realPingLines.find((line) => line.taskId === taskId);
       const line: HomepagePingLine =
         loaded ?? {
@@ -152,8 +160,9 @@ export function useNodeCardModel(
           max: 1,
           loss: null,
         };
-      return {
+      return [{
         ...line,
+        slot,
         buckets: buildPingBuckets(
           line,
           pingBucketCount,
@@ -161,9 +170,10 @@ export function useNodeCardModel(
           offlineSince,
           latencyWindowMs,
         ),
-      };
+      }];
     });
   }, [
+    showPingIpv4, showPingIpv6, homepagePingGroupOverrides, homepagePingProtocols, homepagePingVisibilityOverrides,
     bucketNow,
     carrierNames,
     latencyWindowMs,
@@ -174,6 +184,12 @@ export function useNodeCardModel(
     realPingLines,
     uuid,
   ]);
+
+  const showHomepagePing = multiPingActive
+    ? homepagePingLines.length > 0
+    : isHomepagePingVisible(uuid, selectedTaskId, {
+      showPingIpv4, showPingIpv6, homepagePingGroupOverrides, homepagePingProtocols, homepagePingVisibilityOverrides,
+    });
 
   const metaModel = useMemo(() => {
     if (!meta) return null;
@@ -193,6 +209,7 @@ export function useNodeCardModel(
           ? [{ label: group, color: "gray" }]
           : [];
     return {
+      ipStack: resolveIpStackVisibility(meta, { showIpv4, showIpv6, homepageIpStackOverrides }),
       tags,
       footerTags: fallbackFooterTags,
       compactFooterTags,
@@ -206,7 +223,7 @@ export function useNodeCardModel(
       osName: resolveOsInfo(meta.os).name,
       loadBaseline: meta.cpu_cores > 0 ? meta.cpu_cores : 4,
     };
-  }, [meta, now, showCardGroup, showCardPrice]);
+  }, [meta, now, showCardGroup, showCardPrice, showIpv4, showIpv6, homepageIpStackOverrides]);
 
   // ping 派生的颜色只在 ping item 变化时才变。
   const pingModel = useMemo(
@@ -282,6 +299,7 @@ export function useNodeCardModel(
       ping,
       pingBuckets,
       homepagePingLines,
+      showHomepagePing,
       traffic,
       ...metaModel,
       ...pingModel,
@@ -293,6 +311,7 @@ export function useNodeCardModel(
       isOffline: metrics.online === false,
     };
   }, [
+    showHomepagePing,
     homepagePingLines,
     meta,
     metrics,

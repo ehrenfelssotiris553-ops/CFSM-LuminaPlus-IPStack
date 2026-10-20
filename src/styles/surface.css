@@ -2345,3 +2345,17 @@ body::after {
     animation: none;
   }
 }
+
+
+@media (max-width: 720px) {
+  .theme-manage-toolbar-actions {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 4px;
+  }
+  .theme-manage-sync-status {
+    flex-basis: 100%;
+    min-height: 28px;
+    white-space: normal;
+  }
+}
