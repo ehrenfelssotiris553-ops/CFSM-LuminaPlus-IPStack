@@ -7,7 +7,6 @@ import type {
   TrafficTrendSample,
 } from "@/types/cfsm";
 import { getServerSnapshot, getServersSnapshot, type ServersSnapshot } from "@/services/api";
-import { hasMultipleApiBases } from "@/services/cfsm/config";
 import {
   emptyNodeMetrics,
   isServerOnline,
@@ -687,15 +686,151 @@ function withUnreachableSiteServers(
   return { servers, baseByServerId };
 }
 
-function syncServers(focusUuid: string | null = null) {
-  syncPromise ??= performServersSync(focusUuid).finally(() => {
+interface SnapshotEntry {
+  meta: NodeInfo;
+  metaChanged: boolean;
+  metrics: NodeMetrics;
+  metricsChanged: boolean;
+  trend: NodeTrafficTrend;
+  trendChanged: boolean;
+}
+
+/** 快照里的一台服务器 → 它的展示模型（和现值比较后决定沿用还是替换）。顺带把延迟样本记进 pingLiveStore。 */
+function resolveSnapshotEntry(server: CfsmServer, now: number): SnapshotEntry {
+  const uuid = server.id;
+  const info = toNodeInfo(server);
+  const previousMeta = state.metaByUuid[uuid];
+  const metaUnchanged = previousMeta != null && shallowEqualNodeInfo(previousMeta, info);
+
+  const previousMetrics = state.metricsByUuid[uuid];
+  // 列表接口自带最新指标，可直接作为实时值使用。
+  const restMetrics = carryForwardTotals(
+    toNodeMetrics(server, now, previousMetrics),
+    previousMetrics ?? emptyNodeMetrics(info, isServerOnline(server, now)),
+  );
+  // `/api/servers` 是缓存快照，`last_updated` 常比 WS 推来的样本旧十几到几十秒，而其中的
+  // 瞬时速率又明显偏高（线上实测个别节点 REST 24KB/s vs WS 0.8KB/s，合计约 4 倍）。
+  // 切回前台补的快照若照单全收，就会拿这份旧值盖掉新鲜的 WS 实时值，
+  // 「实时带宽」于是每半分钟被重新抬高一次再慢慢掉回去。快照不比现值新时，
+  // 只取 WS 不下发的字段（月度累计等），实时部分保持现值。
+  // 采用快照时另外挡一道瞬时速率：`updatedAt` 的比较只能防住"拿旧值盖新值"，
+  // 首屏没有现值可比，虚高的速率会长驱直入。
+  const trustSnapshotRate = shouldTrustSnapshotRate(
+    now - restMetrics.updatedAt,
+    realtimeKnownUnavailable(),
+  );
+  const nextMetrics =
+    previousMetrics && previousMetrics.updatedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS && previousMetrics.updatedAt > restMetrics.updatedAt
+      ? {
+          ...previousMetrics,
+          online: restMetrics.online,
+          trafficUpMonthly: restMetrics.trafficUpMonthly,
+          trafficDownMonthly: restMetrics.trafficDownMonthly,
+        }
+      : trustSnapshotRate
+        ? restMetrics
+        : {
+            ...restMetrics,
+            netUp: previousMetrics?.netUp ?? 0,
+            netDown: previousMetrics?.netDown ?? 0,
+          };
+  const alignedMetrics = alignEmptyMetricsTotals(nextMetrics, info);
+  const metricsChanged = !previousMetrics || !shallowEqualMetrics(previousMetrics, alignedMetrics);
+  const metrics = metricsChanged ? alignedMetrics : previousMetrics;
+
+  const prevTrend = state.trafficTrends[uuid] ?? EMPTY_TRAFFIC_TREND;
+  // 新版后端直接给一小时窗口；旧版没有这个字段，回落到逐点累积。
+  const latencyWindow = parseLatencyWindow(server);
+  if (latencyWindow.length > 0) seedPingHistory(uuid, latencyWindow);
+  else recordPingSample(uuid, metrics.updatedAt, metrics.ping);
+  const nextUp = updateTrafficTrendSeries(
+    prevTrend.up,
+    metrics.netUp,
+    metrics.updatedAt,
+    metrics.online,
+  );
+  const nextDown = updateTrafficTrendSeries(
+    prevTrend.down,
+    metrics.netDown,
+    metrics.updatedAt,
+    metrics.online,
+  );
+  const trendChanged = nextUp.changed || nextDown.changed;
+
+  return {
+    meta: metaUnchanged ? previousMeta : info,
+    metaChanged: !metaUnchanged,
+    metrics,
+    metricsChanged,
+    trend: trendChanged
+      ? {
+          up: nextUp.series,
+          down: nextDown.series,
+          snapshot: { up: nextUp.series.snapshot, down: nextDown.series.snapshot },
+        }
+      : prevTrend,
+    trendChanged,
+  };
+}
+
+/**
+ * `mergeFocused` 时只刷新 `focusUuid` 那一台、其余节点原样保留（详情页切回前台补数据用，见 {@link syncCurrentScope}）；
+ * 否则 `focusUuid` 给了就只取那一台、节点表里只剩它（直接打开详情页，见 {@link focusOnlyTarget}），没给就取全站。
+ */
+function syncServers(focusUuid: string | null = null, mergeFocused = false) {
+  syncPromise ??= performServersSync(focusUuid, mergeFocused).finally(() => {
     syncPromise = null;
   });
   return syncPromise;
 }
 
+/**
+ * 把单台快照合进已有的全站节点表：只动这一台，别的节点、它们的延迟缓冲区和 sysConfig 都不碰。
+ *
+ * `/api/server` 的 `sysConfig` 只带 `long_history_points`，拿它覆盖会把首页那份三网详情等开关冲回默认值；
+ * 别的节点这段时间没订阅、`last_updated` 停着，跟着重算会被误判离线（见 {@link refreshOnlineFlags}）。
+ */
+function mergeFocusedSnapshot(snapshot: ServersSnapshot) {
+  const fresh = snapshot.servers[0];
+  // 不在节点表里（期间被删、或访客看的是隐藏节点）就不动首页那份。
+  if (!fresh || !state.rawByUuid[fresh.id]) return;
+  const uuid = fresh.id;
+  const server = withReportTimestamp(fresh, state.rawByUuid[uuid]?.report_timestamp);
+  const entry = resolveSnapshotEntry(server, Date.now());
+  const hiddenChanged = Boolean(state.metaByUuid[uuid]?.hidden) !== Boolean(entry.meta.hidden);
+
+  const base = snapshot.baseByServerId.get(uuid);
+  if (base != null && latestBaseByServerId.get(uuid) !== base) {
+    updateWsSubscriptions(new Map(latestBaseByServerId).set(uuid, base));
+  }
+  const storeStatusChanged = nodeInfoError || state.failureStreak > 0;
+  nodeInfoError = false;
+  commit(
+    {
+      ...state,
+      failureStreak: 0,
+      rawByUuid: { ...state.rawByUuid, [uuid]: server },
+      metaByUuid: entry.metaChanged ? { ...state.metaByUuid, [uuid]: entry.meta } : state.metaByUuid,
+      metricsByUuid: entry.metricsChanged
+        ? { ...state.metricsByUuid, [uuid]: entry.metrics }
+        : state.metricsByUuid,
+      trafficTrends: entry.trendChanged
+        ? { ...state.trafficTrends, [uuid]: entry.trend }
+        : state.trafficTrends,
+    },
+    {
+      meta: entry.metaChanged ? [uuid] : [],
+      metrics: entry.metricsChanged ? [uuid] : [],
+      trafficTrends: entry.trendChanged ? [uuid] : [],
+      nodeList: hiddenChanged,
+      allNodes: entry.metaChanged,
+      storeStatus: storeStatusChanged,
+    },
+  );
+}
+
 /** `focusUuid` 给了就只取那一台（见 {@link focusOnlyTarget}），节点表里只会有它。 */
-async function performServersSync(focusUuid: string | null) {
+async function performServersSync(focusUuid: string | null, mergeFocused = false) {
   if (scrollActive) {
     refreshDeferredWhileScrolling = true;
     return;
@@ -710,6 +845,10 @@ async function performServersSync(focusUuid: string | null) {
         ? await getServerSnapshot(focusUuid, requestOptions)
         : await getServersSnapshot(requestOptions);
     if (controller.signal.aborted) return;
+    if (mergeFocused && focusUuid != null) {
+      mergeFocusedSnapshot(snapshot);
+      return;
+    }
 
     const now = Date.now();
     const { servers: snapshotServers, baseByServerId } = withUnreachableSiteServers(snapshot);
@@ -735,81 +874,13 @@ async function performServersSync(focusUuid: string | null) {
     for (const server of servers) {
       const uuid = server.id;
       rawByUuid[uuid] = server;
-
-      const info = toNodeInfo(server);
-      const previousMeta = state.metaByUuid[uuid];
-      const metaUnchanged = previousMeta != null && shallowEqualNodeInfo(previousMeta, info);
-      metaByUuid[uuid] = metaUnchanged ? previousMeta : info;
-      if (!metaUnchanged) touchedMeta.add(uuid);
-
-      const previousMetrics = state.metricsByUuid[uuid];
-      // 列表接口自带最新指标，可直接作为实时值使用。
-      const restMetrics = carryForwardTotals(
-        toNodeMetrics(server, now, previousMetrics),
-        previousMetrics ?? emptyNodeMetrics(info, isServerOnline(server, now)),
-      );
-      // `/api/servers` 是缓存快照，`last_updated` 常比 WS 推来的样本旧十几到几十秒，而其中的
-      // 瞬时速率又明显偏高（线上实测个别节点 REST 24KB/s vs WS 0.8KB/s，合计约 4 倍）。
-      // 切回前台补的快照若照单全收，就会拿这份旧值盖掉新鲜的 WS 实时值，
-      // 「实时带宽」于是每半分钟被重新抬高一次再慢慢掉回去。快照不比现值新时，
-      // 只取 WS 不下发的字段（月度累计等），实时部分保持现值。
-      // 采用快照时另外挡一道瞬时速率：`updatedAt` 的比较只能防住"拿旧值盖新值"，
-      // 首屏没有现值可比，虚高的速率会长驱直入。
-      const trustSnapshotRate = shouldTrustSnapshotRate(
-        now - restMetrics.updatedAt,
-        realtimeKnownUnavailable(),
-      );
-      const nextMetrics =
-        previousMetrics && previousMetrics.updatedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS && previousMetrics.updatedAt > restMetrics.updatedAt
-          ? {
-              ...previousMetrics,
-              online: restMetrics.online,
-              trafficUpMonthly: restMetrics.trafficUpMonthly,
-              trafficDownMonthly: restMetrics.trafficDownMonthly,
-            }
-          : trustSnapshotRate
-            ? restMetrics
-            : {
-                ...restMetrics,
-                netUp: previousMetrics?.netUp ?? 0,
-                netDown: previousMetrics?.netDown ?? 0,
-              };
-      const alignedMetrics = alignEmptyMetricsTotals(nextMetrics, info);
-      if (!previousMetrics || !shallowEqualMetrics(previousMetrics, alignedMetrics)) {
-        metricsByUuid[uuid] = alignedMetrics;
-        touchedMetrics.add(uuid);
-      } else {
-        metricsByUuid[uuid] = previousMetrics;
-      }
-
-      const prevTrend = state.trafficTrends[uuid] ?? EMPTY_TRAFFIC_TREND;
-      const metrics = metricsByUuid[uuid]!;
-      // 新版后端直接给一小时窗口；旧版没有这个字段，回落到逐点累积。
-      const latencyWindow = parseLatencyWindow(server);
-      if (latencyWindow.length > 0) seedPingHistory(uuid, latencyWindow);
-      else recordPingSample(uuid, metrics.updatedAt, metrics.ping);
-      const nextUp = updateTrafficTrendSeries(
-        prevTrend.up,
-        metrics.netUp,
-        metrics.updatedAt,
-        metrics.online,
-      );
-      const nextDown = updateTrafficTrendSeries(
-        prevTrend.down,
-        metrics.netDown,
-        metrics.updatedAt,
-        metrics.online,
-      );
-      if (nextUp.changed || nextDown.changed) {
-        trafficTrends[uuid] = {
-          up: nextUp.series,
-          down: nextDown.series,
-          snapshot: { up: nextUp.series.snapshot, down: nextDown.series.snapshot },
-        };
-        touchedTrafficTrends.add(uuid);
-      } else {
-        trafficTrends[uuid] = prevTrend;
-      }
+      const entry = resolveSnapshotEntry(server, now);
+      metaByUuid[uuid] = entry.meta;
+      if (entry.metaChanged) touchedMeta.add(uuid);
+      metricsByUuid[uuid] = entry.metrics;
+      if (entry.metricsChanged) touchedMetrics.add(uuid);
+      trafficTrends[uuid] = entry.trend;
+      if (entry.trendChanged) touchedTrafficTrends.add(uuid);
     }
 
     for (const uuid of previousUuids) {
@@ -1215,32 +1286,44 @@ function updateWsSubscriptions(baseByServerId: Map<string, string>) {
   // 按焦点过滤会一台都不剩，所有连接被关掉、计时清零，回首页再重连 —— 正是下面要避免的重置。
   const focusUuid = activeFocusUuid(baseByServerId);
   for (const [serverId, base] of baseByServerId) {
-    // 详情页只订阅正在看的这一台，推送量从全站降到一台。在同一条连接上改 ids、不重连，
-    // 「单次连接」的计时也就不会因为进出详情页被重置。
+    // 详情页只订阅正在看的这一台，推送量从全站降到一台。
     if (focusUuid != null && serverId !== focusUuid) continue;
     const ids = idsByBase.get(base) ?? [];
     ids.push(serverId);
     idsByBase.set(base, ids);
   }
 
-  // 每个后端只订阅属于自己的服务器 ID。
+  // 每个后端只订阅属于自己的服务器 ID。详情页单独用 `subscribe=<id>` 的连接（后端主题规范：独立详情页
+  // 必须单台订阅，不要 `subscribe=all` 再过滤）；这种连接改不了范围，进出详情页、换节点时关掉重建。
+  // 「单次连接」的计时不因此重置：中途换连接时还有连接在，startRealtimeSessionClock 会沿用原来的开始时刻。
+  const wantedServerId = focusUuid;
   for (const [base, ids] of idsByBase) {
     const existing = connectionsByBase.get(base);
-    if (existing) {
+    if (existing && existing.serverId === wantedServerId) {
       existing.updateIds(ids);
       continue;
+    }
+    if (existing) {
+      existing.close();
+      connectionsByBase.delete(base);
+      connectedBases.delete(base);
     }
     if (connectionsByBase.size === 0) connectionsCreatedAt = Date.now();
     connectionsByBase.set(
       base,
-      createWsConnection(base, ids, {
-        onBatch: enqueueWsSamples,
-        onAvailabilityChange: (available) => {
-          if (available) connectedBases.add(base);
-          else connectedBases.delete(base);
-          setRealtimeConnected(connectedBases.size > 0);
+      createWsConnection(
+        base,
+        ids,
+        {
+          onBatch: enqueueWsSamples,
+          onAvailabilityChange: (available) => {
+            if (available) connectedBases.add(base);
+            else connectedBases.delete(base);
+            setRealtimeConnected(connectedBases.size > 0);
+          },
         },
-      }),
+        wantedServerId != null ? { serverId: wantedServerId } : undefined,
+      ),
     );
   }
 
@@ -1427,15 +1510,23 @@ function bootstrap(): Promise<void> {
  * 这次同步只取详情页那一台（`/api/server?id=`）还是全站（`/api/servers`）。
  *
  * 后端主题规范：详情页查单台，不要为一台拉全站。只在「直接打开详情页、节点表还是空的 / 只有上一台」时走单台；
- * 从首页点进来的已经有全站数据，不用再查。多后端部署不知道这台在哪个站，照旧拉全站。
+ * 从首页点进来的已经有全站数据，不用再查。多后端部署时由 getServerSnapshot 去找这台在哪个站。
  */
 function focusOnlyTarget(): string | null {
-  if (realtimeFocusUuid == null || hasMultipleApiBases()) return null;
+  if (realtimeFocusUuid == null) return null;
   return !hydrated || focusOnlyHydrated ? realtimeFocusUuid : null;
 }
 
+/**
+ * 按当前页面补一次数据：首页取全站；详情页只取正在看的那一台（后端主题规范：切回前台按当前页面类型补 REST）。
+ * 从首页点进来的详情页节点表是全站的，只把这一台刷新后合进去，别的节点原样留着给回首页时用。
+ */
 function syncCurrentScope() {
-  return syncServers(focusOnlyTarget());
+  const target = focusOnlyTarget();
+  if (target != null) return syncServers(target);
+  const focusUuid = activeFocusUuid(latestBaseByServerId);
+  if (focusUuid != null && hydrated) return syncServers(focusUuid, true);
+  return syncServers(null);
 }
 
 async function runBootstrap() {

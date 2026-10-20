@@ -7,6 +7,7 @@ import {
   getPingRecords,
   getPublic,
   getServerApiBase,
+  getServerSnapshot,
   getServersSnapshot,
   normalizeHistoryHours,
   resetRecentThemeOptionsWrite,
@@ -457,6 +458,55 @@ describe("getServersSnapshot", () => {
     fetchMock.mockImplementation(jsonReply({ error: "boom", code: 500 }, 500));
 
     await expect(getServersSnapshot()).rejects.toBeInstanceOf(Error);
+  });
+});
+
+describe("getServerSnapshot", () => {
+  const BACKUP = "https://backup.example.com";
+
+  function useTwoSites() {
+    const meta = document.createElement("meta");
+    meta.name = "apiBase";
+    meta.content = `${ORIGIN},${BACKUP}`;
+    document.head.append(meta);
+    resetApiBaseCache();
+  }
+
+  it("asks each site in turn for a server it has never seen, then remembers the owner", async () => {
+    useTwoSites();
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith(BACKUP)
+        ? jsonResponse({ ...serverPayload({ id: "node-only-backup" }), sysConfig: {} })
+        : jsonResponse({ error: "Server not found", code: 404 }, 404),
+    );
+
+    // 直接打开详情页：不知道这台在哪个站，逐个问，不拉全站的 /api/servers。
+    const snapshot = await getServerSnapshot("node-only-backup");
+    expect(snapshot.servers.map((server) => server.id)).toEqual(["node-only-backup"]);
+    expect(snapshot.baseByServerId.get("node-only-backup")).toBe(BACKUP);
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toHaveLength(2);
+    expect(urls.every((url) => url.includes("/api/server?"))).toBe(true);
+
+    // 记下归属后只问那个站。
+    fetchMock.mockClear();
+    await getServerSnapshot("node-only-backup");
+    expect(fetchMock.mock.calls.map(([url]) => String(url).startsWith(BACKUP))).toEqual([true]);
+  });
+
+  it("does not fall through to other sites on errors other than 404", async () => {
+    useTwoSites();
+    fetchMock.mockImplementation(jsonReply({ error: "Unauthorized", code: 401 }, 401));
+
+    await expect(getServerSnapshot("node-private")).rejects.toBeInstanceOf(ApiRequestError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the single-site 404 as an error", async () => {
+    fetchMock.mockImplementation(jsonReply({ error: "Server not found", code: 404 }, 404));
+
+    await expect(getServerSnapshot("node-missing")).rejects.toBeInstanceOf(ApiRequestError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

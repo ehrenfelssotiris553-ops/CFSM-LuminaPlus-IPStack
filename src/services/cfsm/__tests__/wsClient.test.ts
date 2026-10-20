@@ -76,6 +76,23 @@ describe("createWsConnection", () => {
     });
   });
 
+  it("subscribes to one server through the URL for the detail page", () => {
+    const connection = createWsConnection(
+      "https://status.example.com",
+      ["node-a", "node-b"],
+      { onBatch: () => undefined, onAvailabilityChange: () => undefined },
+      { serverId: "node-b" },
+    );
+    const socket = FakeSocket.instances.at(-1)!;
+
+    expect(socket.url).toBe("wss://status.example.com/api/ws?subscribe=node-b");
+    expect(connection.serverId).toBe("node-b");
+    // 单台订阅不发 subscribe 消息，也不接受改 ids。
+    socket.open();
+    connection.updateIds(["node-a"]);
+    expect(socket.sent).toEqual([]);
+  });
+
   it("reports availability only once the socket is open", () => {
     const { availability, socket } = connect(["node-a"]);
 

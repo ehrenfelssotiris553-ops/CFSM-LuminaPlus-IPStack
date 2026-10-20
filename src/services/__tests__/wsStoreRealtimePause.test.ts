@@ -12,6 +12,8 @@ import { CfsmServerSchema, EMPTY_CARRIER_PING } from "@/types/cfsm";
 
 interface FakeConnection {
   ids: string[];
+  /** `subscribe=<id>` 的单台连接；订阅全站时为 null。 */
+  serverId: string | null;
   emitSamples(samples: WsSample[]): void;
   closed: boolean;
   close(): void;
@@ -31,22 +33,33 @@ vi.mock("@/services/cfsm/wsClient", () => ({
     _base: string,
     ids: string[],
     handlers: { onAvailabilityChange(available: boolean): void; onBatch(samples: WsSample[]): void },
+    options?: { serverId?: string },
   ) => {
+    // 和真连接一样：只有连上过的，关掉时才回报一次「不可用」。
+    let open = false;
     const connection: FakeConnection = {
-      ids: [...ids],
+      ids: options?.serverId ? [options.serverId] : [...ids],
+      serverId: options?.serverId ?? null,
       emitSamples: (samples) => handlers.onBatch(samples),
       closed: false,
       close() {
         connection.closed = true;
+        if (open) {
+          open = false;
+          handlers.onAvailabilityChange(false);
+        }
       },
       updateIds(next) {
+        if (connection.serverId) return;
         connection.ids = [...next];
       },
     };
     mocks.connections.push(connection);
     if (mocks.autoOpen) {
       queueMicrotask(() => {
-        if (!connection.closed) handlers.onAvailabilityChange(true);
+        if (connection.closed) return;
+        open = true;
+        handlers.onAvailabilityChange(true);
       });
     }
     return connection;
@@ -323,27 +336,82 @@ describe("实时连接时限（frontend_ws_timeout_minutes）", () => {
 });
 
 describe("详情页只订阅正在看的这一台", () => {
-  it("narrows the subscription on the same socket and restores everyone on leave", async () => {
+  it("switches to a subscribe=<id> socket on the detail page and back to subscribe=all on leave", async () => {
     mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a", "node-b"]));
     const store = await loadStore();
     const release = store.retainStore();
     await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.connections[0]!.serverId).toBeNull();
     expect(mocks.connections[0]!.ids).toEqual(["node-a", "node-b"]);
 
+    // 后端主题规范：独立详情页必须 subscribe=<id>，不能 subscribe=all 再过滤。
     const leave = store.focusRealtimeNode("node-b");
-    expect(mocks.connections[0]!.ids).toEqual(["node-b"]);
+    expect(mocks.connections[0]!.closed).toBe(true);
+    expect(mocks.connections).toHaveLength(2);
+    expect(mocks.connections[1]!.serverId).toBe("node-b");
     // 没订阅的 node-a 一直没有新帧：不代表它离线，在详情页期间不改判。
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(mocks.connections[0]!.ids).toEqual(["node-b"]);
     expect(store.getNodeMetricsSnapshot("node-a")?.online).toBe(true);
 
     leave();
-    expect(mocks.connections[0]!.ids).toEqual(["node-a", "node-b"]);
-    // 全程同一条连接：没有重连，连接时限的计时也不会被进出详情页重置。
-    expect(mocks.connections).toHaveLength(1);
+    expect(mocks.connections[1]!.closed).toBe(true);
+    expect(mocks.connections).toHaveLength(3);
+    expect(mocks.connections[2]!.serverId).toBeNull();
+    expect(mocks.connections[2]!.ids).toEqual(["node-a", "node-b"]);
     // 进详情页、回首页都没有多查 /api/servers（节点表早就有了）。
     expect(syncCount()).toBe(1);
     expect(mocks.getServerSnapshot).not.toHaveBeenCalled();
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it("keeps counting the connection time limit across detail-page socket switches", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a", "node-b"]));
+    const store = await loadStore();
+    store.setRealtimeSessionLimitMinutes(1);
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // 进出详情页换了连接，但「单次连接」从首次建连算起，不因换连接重新计时。
+    await vi.advanceTimersByTimeAsync(40_000);
+    const leave = store.focusRealtimeNode("node-b");
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(store.getStoreStatusSnapshot().realtimeSessionExpired).toBe(true);
+    expect(mocks.connections.every((connection) => connection.closed)).toBe(true);
+
+    leave();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it("refreshes only the viewed server when the detail page comes back to the foreground", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a", "node-b"]));
+    mocks.getServerSnapshot.mockImplementation(async (id: string) => ({
+      ...snapshot([id]),
+      servers: [CfsmServerSchema.parse({ id, name: `${id} renamed`, last_updated: Date.now() })],
+    }));
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    const leave = store.focusRealtimeNode("node-b");
+
+    setHidden(true);
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // 后端主题规范：切回前台按当前页面类型补 REST —— 详情页补 /api/server?id=，不是全站列表。
+    expect(syncCount()).toBe(1);
+    expect(mocks.getServerSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.getServerSnapshot.mock.calls[0]![0]).toBe("node-b");
+    // 只刷新这一台，别的节点留着给回首页时用。
+    expect(nodeIds(store)).toEqual(["node-a", "node-b"]);
+    expect(store.getNodeMetaSnapshot("node-b")?.name).toBe("node-b renamed");
+    expect(store.getStoreStatusSnapshot().hydrated).toBe(true);
+
+    leave();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(syncCount()).toBe(1);
 
     release();
     await vi.advanceTimersByTimeAsync(0);
@@ -361,7 +429,8 @@ describe("详情页只订阅正在看的这一台", () => {
     expect(mocks.getServerSnapshot.mock.calls[0]![0]).toBe("node-b");
     expect(syncCount()).toBe(0);
     expect(nodeIds(store)).toEqual(["node-b"]);
-    expect(mocks.connections[0]!.ids).toEqual(["node-b"]);
+    expect(mocks.connections).toHaveLength(1);
+    expect(mocks.connections[0]!.serverId).toBe("node-b");
 
     // 回首页：节点表只有一台，补那一次全量；补回来之前按没加载完处理。
     leave();
@@ -370,6 +439,10 @@ describe("详情页只订阅正在看的这一台", () => {
     expect(syncCount()).toBe(1);
     expect(nodeIds(store)).toEqual(["node-a", "node-b"]);
     expect(store.getStoreStatusSnapshot().hydrated).toBe(true);
+    // 单台连接改不了范围：关掉，换成订阅全站的。
+    expect(mocks.connections[0]!.closed).toBe(true);
+    expect(mocks.connections.at(-1)!.serverId).toBeNull();
+    expect(mocks.connections.at(-1)!.ids).toEqual(["node-a", "node-b"]);
 
     release();
     await vi.advanceTimersByTimeAsync(0);

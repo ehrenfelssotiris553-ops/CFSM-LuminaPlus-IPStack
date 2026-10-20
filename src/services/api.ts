@@ -18,7 +18,7 @@ import {
   type PublicConfig,
   type SysConfig,
 } from "@/types/cfsm";
-import { getJwtToken, getPrimaryApiBase } from "@/services/cfsm/config";
+import { getApiBases, getJwtToken } from "@/services/cfsm/config";
 import {
   ApiRequestError,
   cfsmGet,
@@ -385,29 +385,44 @@ const SingleServerResponseSchema = z.unknown().transform((raw, ctx) => {
  * 只取一台的快照：直接打开详情页时用（后端主题规范：详情页查 `/api/server?id=`，不要为一台拉全站的 `/api/servers`）。
  *
  * 形状和 {@link getServersSnapshot} 一样，节点表里只有这一台；响应自带 `sysConfig`，没有首页用的延迟窗口。
- * 只给单后端部署用 —— 多后端不知道这台在哪个站，由调用方照旧拉全站。
+ *
+ * 多后端部署：已知这台归哪个站（首页列表记下过）就只问那个站；不知道（直接打开详情页）就按顺序逐个站问，
+ * 不在的站回 404 就问下一个。比为了一台把每个站的 `/api/servers` 都拉一遍省得多。
  */
 export async function getServerSnapshot(
   serverId: string,
   options?: Omit<RequestOptions, "base">,
 ): Promise<ServersSnapshot> {
-  const base = getPrimaryApiBase();
-  const { server, sysConfig } = await cfsmGet(
-    `/api/server?${new URLSearchParams({ id: serverId })}`,
-    SingleServerResponseSchema,
-    { ...options, base },
-  );
-  const baseByServerId = new Map([[server.id, base]]);
-  rememberServerBases(baseByServerId);
-  return {
-    servers: [server],
-    baseByServerId,
-    sysConfig,
-    regionStats: {},
-    stats: emptyStats(),
-    partial: false,
-    failedBases: [],
-  };
+  const knownBase = getServerApiBase(serverId);
+  const bases = knownBase ? [knownBase] : getApiBases();
+  let notFound: unknown = null;
+  for (const base of bases) {
+    try {
+      const { server, sysConfig } = await cfsmGet(
+        `/api/server?${new URLSearchParams({ id: serverId })}`,
+        SingleServerResponseSchema,
+        { ...options, base },
+      );
+      const baseByServerId = new Map([[server.id, base]]);
+      rememberServerBases(baseByServerId);
+      return {
+        servers: [server],
+        baseByServerId,
+        sysConfig,
+        regionStats: {},
+        stats: emptyStats(),
+        partial: false,
+        failedBases: [],
+      };
+    } catch (error) {
+      if (bases.length > 1 && error instanceof ApiRequestError && error.status === 404) {
+        notFound ??= error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw notFound ?? new Error(`Server ${serverId} not found on any API base`);
 }
 
 /** 单台服务器详情。 */

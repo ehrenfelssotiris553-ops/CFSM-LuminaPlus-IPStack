@@ -5,7 +5,7 @@ import { getJwtToken, toWebSocketBase } from "@/services/cfsm/config";
  *
  * 协议要点（见 theme-develop.md 第 3 节）：
  * - `?subscribe=all` 建连后必须再通过通道发送 `{type:"subscribe",scope:"all",ids}`，
- *   否则服务端不会推送任何更新；
+ *   否则服务端不会推送任何更新；`?subscribe=<id>` 只收那一台，不用发 ids（详情页用）；
  * - 推送统一为 `batchUpdate`，样本对象可能落在 `data` / `payload` / `metrics` 任一字段；
  * - `ids` 最多 500 个，非法 `scope`/`ids` 会被以 close code 1008 断开——这种情况重连也没用。
  */
@@ -41,8 +41,18 @@ export interface WsClientHandlers {
 }
 
 export interface WsConnection {
+  /** 单台订阅（`subscribe=<id>`）时是那台的 ID；订阅全站时为 null。 */
+  readonly serverId: string | null;
   updateIds(ids: string[]): void;
   close(): void;
+}
+
+export interface WsConnectionOptions {
+  /**
+   * 只订阅这一台：地址用 `subscribe=<id>`，不需要再发 subscribe 消息（后端文档：详情页用单台订阅，
+   * 不走 250ms 合并窗口）。这种连接改不了订阅范围，换节点或回首页要关掉重建。
+   */
+  serverId?: string;
 }
 
 function sanitizeIds(ids: string[]): string[] {
@@ -96,10 +106,16 @@ function extractSamples(message: unknown): WsSample[] {
  * `/api/ws` 的连接地址。私有站点里：同域靠登录后的 `cfsm_auth` Cookie；跨域（纯静态部署的主题）时
  * 浏览器原生 WebSocket 带不了 Authorization 头，只能把 JWT 放进查询参数 `token`（后端文档第 3 节）。
  * token 会进访问日志，所以只在 wss 上、且确实跨域时才带。
+ * `subscribe` 默认 `all`（再发 ids 过滤）；详情页传那台的 ID。
  */
-export function buildWsUrl(base: string, token: string, pageHost: string): string {
+export function buildWsUrl(
+  base: string,
+  token: string,
+  pageHost: string,
+  subscribe = "all",
+): string {
   const url = new URL(`${toWebSocketBase(base)}/api/ws`);
-  url.searchParams.set("subscribe", "all");
+  url.searchParams.set("subscribe", subscribe);
   if (token && url.protocol === "wss:" && url.host !== pageHost) {
     url.searchParams.set("token", token);
   }
@@ -114,8 +130,10 @@ export function createWsConnection(
   base: string,
   initialIds: string[],
   handlers: WsClientHandlers,
+  options: WsConnectionOptions = {},
 ): WsConnection {
-  let ids = sanitizeIds(initialIds);
+  const singleId = options.serverId ? (sanitizeIds([options.serverId])[0] ?? null) : null;
+  let ids = singleId ? [singleId] : sanitizeIds(initialIds);
   let socket: WebSocket | null = null;
   let pingTimer: number | null = null;
   let reconnectTimer: number | null = null;
@@ -141,6 +159,8 @@ export function createWsConnection(
   }
 
   function sendSubscribe() {
+    // 单台订阅由地址决定，不发 subscribe 消息。
+    if (singleId) return;
     if (socket?.readyState !== WebSocket.OPEN || ids.length === 0) return;
     socket.send(JSON.stringify({ type: "subscribe", scope: "all", ids }));
   }
@@ -167,7 +187,9 @@ export function createWsConnection(
     if (closed) return;
     try {
       // 每次（重）连都现算地址：期间可能登录 / 退出过，token 要跟着变。
-      socket = new WebSocket(buildWsUrl(base, getJwtToken(), window.location.host));
+      socket = new WebSocket(
+        buildWsUrl(base, getJwtToken(), window.location.host, singleId ?? "all"),
+      );
     } catch {
       setAvailable(false);
       scheduleReconnect();
@@ -218,7 +240,9 @@ export function createWsConnection(
   connect();
 
   return {
+    serverId: singleId,
     updateIds(nextIds: string[]) {
+      if (singleId) return;
       const sanitized = sanitizeIds(nextIds);
       if (sameIds(ids, sanitized)) return;
       ids = sanitized;
