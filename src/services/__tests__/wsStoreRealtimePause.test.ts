@@ -501,6 +501,35 @@ describe("快照同步", () => {
   });
 });
 
+describe("设置页复用首页的节点表", () => {
+  it("hands out the full list after the home page loaded it, even once the store stopped", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a", "node-b"]));
+    const store = await loadStore();
+    expect(store.getCachedFullNodeList()).toBeNull();
+
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // 离开首页、store 已停：设置页拿这份就不必再查 /api/servers。
+    expect(store.getCachedFullNodeList()?.map((node) => node.uuid)).toEqual(["node-a", "node-b"]);
+    expect(syncCount()).toBe(1);
+  });
+
+  it("has no list to share when only the detail page's single server was loaded", async () => {
+    const store = await loadStore();
+    const release = store.retainStore();
+    const leave = store.focusRealtimeNode("node-b");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getCachedFullNodeList()).toBeNull();
+
+    leave();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+});
+
 describe("resolveRealtimeSessionLimitMs", () => {
   it("treats 0, negatives, fractions and junk as no limit", async () => {
     const { resolveRealtimeSessionLimitMs } = await loadStore();

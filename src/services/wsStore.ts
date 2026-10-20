@@ -830,6 +830,7 @@ async function performServersSync(focusUuid: string | null) {
     // 节点被删除后连带清掉它的延迟缓冲区。只取了一台时节点表不全，不能据此清别的节点的。
     if (focusUuid == null) retainPingNodes(order);
     focusOnlyHydrated = focusUuid != null;
+    fullNodeListCached = focusUuid == null;
 
     const sysConfigChanged = updateSysConfigSnapshot(snapshot.sysConfig);
     const storeStatusChanged =
@@ -1164,6 +1165,11 @@ let subscriptionWidenedAt = 0;
 let devSnapshotPolling = false;
 /** 节点表里现在只有详情页那一台（直接打开详情页时只查了 `/api/server?id=`），回首页要补一次全量。 */
 let focusOnlyHydrated = false;
+/**
+ * 节点表是不是一份完整的全站列表（最近一次同步取的是 `/api/servers` 而不是单台）。
+ * store 停掉（离开首页）时节点表留在内存里，这个标记也跟着留着，供设置页复用，见 {@link getCachedFullNodeList}。
+ */
+let fullNodeListCached = false;
 
 /** 最近一次快照给出的「节点 → 所属后端」：切换详情页焦点时照它重排订阅，不必等下一次同步。 */
 let latestBaseByServerId = new Map<string, string>();
@@ -1682,6 +1688,16 @@ export function getNodeTrafficTrendSnapshot(uuid: string): {
 } {
   const trend = state.trafficTrends[uuid] ?? EMPTY_TRAFFIC_TREND;
   return trend.snapshot;
+}
+
+/**
+ * 首页这次打开页面已经取过的全站节点表；没取过（直接打开设置页 / 详情页）返回 null。
+ *
+ * 设置页只要节点名字和分组，有这份就不必再查一次 `/api/servers`（后端主题规范：列表只在首页首次进入查一次）。
+ */
+export function getCachedFullNodeList(): NodeInfo[] | null {
+  if (!fullNodeListCached || state.order.length === 0) return null;
+  return getAllNodeMetaSnapshot();
 }
 
 export function getAllNodeMetaSnapshot(): NodeInfo[] {

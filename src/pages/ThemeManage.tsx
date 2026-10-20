@@ -63,6 +63,7 @@ import {
 } from "@/hooks/useSiteThemeOptions";
 import { useLocalThemeSettings } from "@/hooks/useThemeSettings";
 import { getNodes } from "@/services/api";
+import { getCachedFullNodeList } from "@/services/wsStore";
 import { carrierPingTasks } from "@/services/cfsm/mappers";
 import { clearPingLineOverrides } from "@/services/pingLineOverrideStore";
 import {
@@ -1115,16 +1116,21 @@ export function ThemeManage() {
   // 名字则跟着后端的 custom_*_name / node_N_name 走（站长改过就显示他改的）。
   const pingTasks = useMemo(() => carrierPingTasks(carrierNames), [carrierNames]);
   const tasksLoading = false;
+  // 从首页进来时节点表已经在内存里，直接用；只有直接打开设置页才查一次 `/api/servers`，
+  // 且这次打开页面内不再重查（后端主题规范：列表只查一次）。
+  const [cachedClients] = useState(getCachedFullNodeList);
   const {
-    data: adminClients,
+    data: fetchedClients,
     isLoading: clientsLoading,
     error: clientsError,
   } = useQuery({
     queryKey: ["theme-manage", "node-meta"],
     queryFn: ({ signal }) => getNodes({ signal }),
-    staleTime: 60_000,
+    staleTime: Number.POSITIVE_INFINITY,
     retry: 1,
+    enabled: cachedClients == null,
   });
+  const adminClients = cachedClients ?? fetchedClients;
 
   // 「当前已保存的设置」= 站点预设 + 本机覆盖，和全站读取口径一致。
   // 只取后端的话，reseed 会在 config 到达后把草稿冲回站点默认值，
