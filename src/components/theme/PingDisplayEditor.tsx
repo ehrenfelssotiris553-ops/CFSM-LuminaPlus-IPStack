@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, EyeOff } from "lucide-react";
-import type { ComponentPropsWithoutRef } from "react";
+import { EyeOff } from "lucide-react";
 import { t } from "@/i18n";
 import { InstancePanel } from "@/components/instance/InstancePanel";
+import { IP_STACK_MODES, ipStackModeLabel, SettingSelect as Select, SettingToggle } from "@/components/theme/SettingControls";
 import type { NodeInfo, PingTask } from "@/types/cfsm";
 import type { ResolvedThemeSettings } from "@/utils/themeSettings";
 import { getIpStackOverride, ipStackMode, setIpStackMode, type IpStackMode } from "@/utils/ipStack";
@@ -19,21 +19,8 @@ import { setPingLineOverrides } from "@/services/pingLineOverrideStore";
 import { HOMEPAGE_MULTI_PING_MAX_COUNT } from "@/utils/pingTasks";
 
 type Settings = Pick<ResolvedThemeSettings, "showPingIpv4" | "showPingIpv6" | "homepagePingGroupOverrides" | "homepagePingProtocols" | "homepagePingVisibilityOverrides" | "homepageMultiPingTaskIds" | "enableHomepageMultiPing">;
-const modes = ["auto", "show", "hide"] as const;
 function ModeOptions() {
-  return modes.map((mode) => <option key={mode} value={mode}>{t(mode === "auto" ? "settings.ipStackAuto" : mode === "show" ? "settings.ipStackShow" : "settings.ipStackHide")}</option>);
-}
-
-/** 和设置页其他下拉框同一套样式（见 ThemeManage 的 SettingSelect）：自己画箭头，左右留白一致。 */
-function Select({ children, ...props }: ComponentPropsWithoutRef<"select">) {
-  return (
-    <div className="setting-select">
-      <select {...props} className="surface-inset w-full text-[13px] text-[var(--text-primary)] outline-none">
-        {children}
-      </select>
-      <ChevronDown size={14} className="setting-select-icon" aria-hidden />
-    </div>
-  );
+  return IP_STACK_MODES.map((mode) => <option key={mode} value={mode}>{ipStackModeLabel(mode)}</option>);
 }
 
 /** 结果来自哪一层，写在每条线路下面：三层规则叠在一起时，光看「显示 / 隐藏」猜不出为什么。 */
@@ -49,16 +36,6 @@ function sourceText(source: PingVisibilitySource, protocol: PingProtocol): strin
     default:
       return t("settings.pingSourceOther");
   }
-}
-
-/** 和设置页其他「标题 + 开关」行同一套样式（见 ThemeManage 的 ToggleRow）。 */
-function SettingToggle({ title, checked, onChange }: { title: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-      <span className="block min-w-0 setting-subhead-title">{title}</span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent-500)]" />
-    </label>
-  );
 }
 
 export function PingDisplayEditor({ settings, clients, tasks, loading, lineOverrides, localLineOverrides, onChange }: {

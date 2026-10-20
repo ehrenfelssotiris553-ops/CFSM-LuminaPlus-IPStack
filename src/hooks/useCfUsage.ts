@@ -4,7 +4,7 @@ import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { getCfUsage } from "@/services/api";
 import { cfUsageQueryTiming } from "@/utils/cfUsage";
 
-export const CF_USAGE_QUERY_KEY = ["cf-usage"] as const;
+const CF_USAGE_QUERY_KEY = ["cf-usage"] as const;
 
 /**
  * 首页 CF 用量。只有登录站长、且设置里开着时才查；查几次由「刷新方式」决定（见 cfUsageQueryTiming）。

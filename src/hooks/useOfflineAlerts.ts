@@ -53,9 +53,13 @@ export function useOfflineNotifyEnabled(): boolean {
   return useSyncExternalStore(subscribeOfflineNotifyEnabled, readOfflineNotifyEnabled, readOfflineNotifyEnabled);
 }
 
-function showNotification(title: string, body: string) {
+/**
+ * 掉线、恢复各用一个 tag：同一 tag 的新通知会替换旧的，两种共用的话同一时刻既有掉线又有恢复，
+ * 掉线那条会被恢复那条顶掉。同一种的新通知替换旧的正好（只看最新一批）。
+ */
+function showNotification(kind: "offline" | "recovered", title: string, body: string) {
   try {
-    const notification = new window.Notification(title, { body, tag: "cfsm-luminaplus-online", lang: document.documentElement.lang });
+    const notification = new window.Notification(title, { body, tag: `cfsm-luminaplus-${kind}`, lang: document.documentElement.lang });
     notification.onclick = () => {
       window.focus();
       notification.close();
@@ -86,10 +90,10 @@ export function useOfflineNotifications() {
     if (!before || !enabled || notificationSupport() !== "granted") return;
     const { offline, recovered } = findOnlineTransitions(before, nodes);
     if (offline.length > 0) {
-      showNotification(t("notify.offlineTitle", { n: offline.length }), formatNodeNames(offline));
+      showNotification("offline", t("notify.offlineTitle", { n: offline.length }), formatNodeNames(offline));
     }
     if (recovered.length > 0) {
-      showNotification(t("notify.recoveredTitle", { n: recovered.length }), formatNodeNames(recovered));
+      showNotification("recovered", t("notify.recoveredTitle", { n: recovered.length }), formatNodeNames(recovered));
     }
   }, [active, enabled, nodes]);
 }

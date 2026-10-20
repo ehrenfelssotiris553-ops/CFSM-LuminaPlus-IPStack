@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Network } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Network } from "lucide-react";
 import { t } from "@/i18n";
 import { InstancePanel } from "@/components/instance/InstancePanel";
 import { IpStackBadges } from "@/components/node/IpStackBadges";
+import { IP_STACK_MODES, ipStackModeLabel, SettingSelect, SettingToggle } from "@/components/theme/SettingControls";
 import type { NodeInfo } from "@/types/cfsm";
 import { dedupeGroupLabels, getHomeGroupLabel } from "@/utils/homeNodes";
 import {
@@ -23,16 +24,11 @@ export interface IpStackEditorSettings {
   showIpStackStats: boolean;
 }
 
-const MODES = ["auto", "show", "hide"] as const;
 const PROTOCOLS = ["ipv4", "ipv6"] as const;
 /** 批量设置里「这个协议不动」。 */
 const KEEP = "keep";
 /** 批量设置的「全部节点」。分组名来自后台，用一个不会和分组名撞上的值。 */
 const ALL_NODES = "\u0000all";
-
-function modeLabel(mode: IpStackMode): string {
-  return t(mode === "auto" ? "settings.ipStackAuto" : mode === "show" ? "settings.ipStackShow" : "settings.ipStackHide");
-}
 
 function protocolLabel(protocol: (typeof PROTOCOLS)[number]): string {
   return protocol === "ipv4" ? "IPv4" : "IPv6";
@@ -41,61 +37,6 @@ function protocolLabel(protocol: (typeof PROTOCOLS)[number]): string {
 function matchesSearch(client: NodeInfo, keyword: string): boolean {
   if (!keyword) return true;
   return [client.name, client.uuid, client.group, client.region].join(" ").toLowerCase().includes(keyword);
-}
-
-/** 和设置页其他「标题 + 说明 + 开关」行同一套样式（见 ThemeManage 的 ToggleRow）。 */
-function SettingToggle({
-  title,
-  desc,
-  checked,
-  onChange,
-}: {
-  title: string;
-  desc: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-      <span className="min-w-0">
-        <span className="block setting-subhead-title">{title}</span>
-        <span className="mt-1 block setting-hint">{desc}</span>
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-      />
-    </label>
-  );
-}
-
-/** 和设置页其他下拉框同一套样式（见 ThemeManage 的 SettingSelect）。 */
-function Select({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="setting-select">
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="surface-inset w-full text-[13px] text-[var(--text-primary)] outline-none"
-      >
-        {children}
-      </select>
-      <ChevronDown size={14} className="setting-select-icon" aria-hidden />
-    </div>
-  );
 }
 
 /** 一台节点一个协议的「自动 / 显示 / 隐藏」：三个并排按钮，比下拉框少点一次、当前值一眼看得到。 */
@@ -110,7 +51,7 @@ function ModeButtons({
 }) {
   return (
     <div className="instance-segmented ip-stack-mode" role="group" aria-label={label}>
-      {MODES.map((mode) => (
+      {IP_STACK_MODES.map((mode) => (
         <button
           key={mode}
           type="button"
@@ -118,7 +59,7 @@ function ModeButtons({
           aria-pressed={value === mode}
           onClick={() => onChange(mode)}
         >
-          {modeLabel(mode)}
+          {ipStackModeLabel(mode)}
         </button>
       ))}
     </div>
@@ -223,28 +164,35 @@ export function IpStackEditor({
             <span className="setting-hint">{t("settings.ipStackBulkHint")}</span>
           </div>
           <div className="ip-stack-bulk mt-2">
-            <Select label={t("settings.ipStackBulkGroup")} value={bulkGroup} onChange={setBulkGroup}>
+            <SettingSelect
+              aria-label={t("settings.ipStackBulkGroup")}
+              value={bulkGroup}
+              onChange={(event) => setBulkGroup(event.target.value)}
+            >
               <option value={ALL_NODES}>{t("settings.ipStackBulkAll", { n: clients.length })}</option>
               {groups.map((group) => (
                 <option key={group} value={group}>
                   {group}
                 </option>
               ))}
-            </Select>
+            </SettingSelect>
             {PROTOCOLS.map((protocol) => (
-              <Select
+              <SettingSelect
                 key={protocol}
-                label={`${t("settings.ipStackBulkGroup")} ${protocolLabel(protocol)}`}
+                aria-label={`${t("settings.ipStackBulkGroup")} ${protocolLabel(protocol)}`}
                 value={bulkModes[protocol]}
-                onChange={(value) => setBulkModes((previous) => ({ ...previous, [protocol]: value as IpStackMode | typeof KEEP }))}
+                onChange={(event) => {
+                  const value = event.target.value as IpStackMode | typeof KEEP;
+                  setBulkModes((previous) => ({ ...previous, [protocol]: value }));
+                }}
               >
                 <option value={KEEP}>{t("settings.ipStackBulkKeep", { protocol: protocolLabel(protocol) })}</option>
-                {MODES.map((mode) => (
+                {IP_STACK_MODES.map((mode) => (
                   <option key={mode} value={mode}>
-                    {`${protocolLabel(protocol)} · ${modeLabel(mode)}`}
+                    {`${protocolLabel(protocol)} · ${ipStackModeLabel(mode)}`}
                   </option>
                 ))}
-              </Select>
+              </SettingSelect>
             ))}
             <button
               type="button"

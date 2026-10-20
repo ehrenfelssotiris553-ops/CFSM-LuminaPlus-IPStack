@@ -123,18 +123,13 @@ export interface PingDisplaySettings {
 }
 
 export function isHomepagePingVisible(uuid: string, taskId: number, settings: PingDisplaySettings): boolean {
-  const explicit = nodePingVisibility(settings.homepagePingVisibilityOverrides, uuid)[String(taskId)];
-  if (typeof explicit === "boolean") return explicit;
-  const protocol = settings.homepagePingProtocols[String(taskId)] ?? "other";
-  if (protocol === "other") return true;
-  const node = getIpStackOverride(settings.homepagePingGroupOverrides, uuid);
-  return node[protocol] ?? (protocol === "ipv4" ? settings.showPingIpv4 : settings.showPingIpv6);
+  return explainHomepagePingVisibility(uuid, taskId, settings).visible;
 }
 
 /** 首页这条线路为什么显示 / 隐藏：单条设置、本台协议组、全站默认，或线路不分协议（始终显示）。 */
 export type PingVisibilitySource = "line" | "group" | "global" | "other";
 
-/** 和 {@link isHomepagePingVisible} 同一套优先级，额外说明结果来自哪一层，设置页据此提示。 */
+/** 首页显示规则：单条设置 > 本台协议组 > 全站 V4 / V6 默认，不分协议的线路始终显示；另外说明结果来自哪一层，设置页据此提示。 */
 export function explainHomepagePingVisibility(
   uuid: string,
   taskId: number,

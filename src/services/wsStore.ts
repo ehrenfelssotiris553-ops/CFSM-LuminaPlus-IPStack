@@ -1078,7 +1078,7 @@ function runWsTick(): void {
  * 首页一次要画几十张卡片，逐帧匀速回放会让整页每秒重渲染好几次；首页只需要「现在是多少」，
  * 每秒刷一次就够。详情页只看一台、还要画实时曲线，仍走上面的匀速回放（见 {@link enqueueWsSamples}）。
  */
-export const HOME_WS_FLUSH_MS = 1_000;
+const HOME_WS_FLUSH_MS = 1_000;
 let homeWsBatch: WsSample[] = [];
 /** 这一批里每台最新那帧的时间，挡掉晚到的旧帧。 */
 const homeWsLatestTs = new Map<string, number>();

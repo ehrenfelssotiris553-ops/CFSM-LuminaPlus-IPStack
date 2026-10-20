@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { t } from "@/i18n";
+import { SettingToggle } from "@/components/theme/SettingControls";
 import { useOfflineNotifyEnabled } from "@/hooks/useOfflineAlerts";
 import { notificationSupport, writeOfflineNotifyEnabled, type NotificationSupport } from "@/utils/offlineAlerts";
 
@@ -42,18 +43,12 @@ export function OfflineNotifyToggle() {
         : t("settings.offlineNotifyDesc");
 
   return (
-    <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-      <span className="min-w-0">
-        <span className="block setting-subhead-title">{t("settings.offlineNotify")}</span>
-        <span className="mt-1 block setting-hint" role="status">{status}</span>
-      </span>
-      <input
-        type="checkbox"
-        checked={active}
-        disabled={requesting || support === "unsupported" || support === "denied"}
-        onChange={(event) => void toggle(event.target.checked)}
-        className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-      />
-    </label>
+    <SettingToggle
+      title={t("settings.offlineNotify")}
+      desc={<span role="status">{status}</span>}
+      checked={active}
+      disabled={requesting || support === "unsupported" || support === "denied"}
+      onChange={(next) => void toggle(next)}
+    />
   );
 }
