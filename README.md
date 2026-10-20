@@ -52,8 +52,9 @@ https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
 页面右上角快捷栏里的「主题设置」进入，分外观 / 首页 / 卡片 / 花费 / 延迟五组，改完停手就自动保存，没有保存按钮。
 
 - **访客**：设置存在自己的浏览器里，只影响这台设备；只存改过的项，没改过的跟着站点的配置走。
-- **登录站长**：改动自动同步到后端（`POST /api/theme_options`），成为所有访客的默认。发之前先读一次后端当前配置、
-  只叠上这台设备改过的项，别的设备上改的不会被盖掉。后端配置被别人整份改掉时（比如切到别的主题又切回来），
+- **登录站长**：改动自动同步到后端（`POST /api/theme_options`），成为所有访客的默认。以本页缓存的配置为底、
+  只叠上这台设备改过的项；保存前不再重读 `/api/config`（规范要求整个页面只查一次），所以在一台设备改完后，
+  另一台开着的旧页面先刷新再改，免得旧副本盖掉新设置。后端配置被别人整份改掉时（比如切到别的主题又切回来），
   页面底部会提示，可以一键恢复上次的设置。
 - **「改用后端配置」**：丢掉本机存过的设置，回到后端当前的配置。本机改过的项会一直压着后端，想跟随站点就点它。
 - **「复制配置 JSON」**（访客可见）：导出完整配置，粘到后台「外观设置 → 主题自定义配置」，效果和站长同步一样。
@@ -72,17 +73,20 @@ https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
 | --- | --- |
 | 站点配置、登录态、主题预设 | `GET /api/config` |
 | 节点列表与指标、首页延迟窗口 | `GET /api/servers` |
-| 直接打开详情页时那一台 | `GET /api/server?id=` |
+| 详情页那一台（直接打开、切回前台补数据） | `GET /api/server?id=` |
 | 实时推送 | `GET /api/ws` |
 | 详情页的系统资源 / Ping 历史（两张图同一档位共用一次查询） | `GET /api/history/all` |
 
 遵守后端主题开发规范（`theme-ai-prompt.md` 的「消耗铁律」）：
 
-- `/api/config` 整个页面只查一次；`/api/servers` 只在首次进入和切回前台时查，没有定时轮询，数值刷新全走 WebSocket。
-  后台新加、删掉的节点要切回前台或刷新页面才看得到。
+- `/api/config` 整个页面只查一次；`/api/servers` 只在首页首次进入和切回前台时查，没有定时轮询，数值刷新全走 WebSocket。
+  后台新加、删掉的节点要切回前台或刷新页面才看得到。首屏加载失败最多自动重试 6 次，之后显示「重试」按钮。
+- 首页订阅全站（`subscribe=all` 加 ids），每秒合并刷新一次；详情页单独用 `subscribe=<id>` 订阅那一台，逐帧显示实时曲线。
+  多后端部署时，每个后端只订阅自己的节点。
 - 页面一切到后台就断开 WebSocket，切回来立刻重连（后端只要有前端连着，全站探针就约 2 秒上报一次）。
   断线按指数退避重连，连续 10 次失败停手。后台设了「前端实时连接超时」时，到时断开并提示访客是否继续。
-- 首页不查历史：卡片上的延迟柱子用 `/api/servers` 下发的约两小时窗口，加上页面开着时 WebSocket 推来的实测值。
+- 首页不查历史：卡片上的延迟柱子用 `/api/servers` 下发的约两小时窗口，加上页面开着时 WebSocket 推来的实测值；
+  后台关掉「三网详情」时窗口是空的，首页只显示当前延迟数值、不画柱子。
   首页和详情页的延迟、丢包对不上是正常的（窗口一格约 6 分钟，详情页约 30 秒一行），以详情页为准。
 - 未登录访客只能查 24 小时以内的历史，登录后可选到 7 天。
 - 节点在线与否按后端最近 5 分钟有没有收到它的上报判断，不看节点自己的时钟。
@@ -122,12 +126,35 @@ BACKGROUND_IMAGE=https://example.com/bg.webp
 `.github/workflows/build-theme.yml` 在推送时构建并发布产物：推 `main` 发布到 `dist`（线上地址），
 推 `preview` 发布到 `dist-preview`（验收用，在后台用 `.../tree/dist-preview` 或它的 SHA 预览）。
 
-- 发版先改 `package.json` 的 `version`，在 CHANGELOG 加一段 `## v<版本号>`，CI 取该段第一行作为产物提交的说明，
-  也就是主题商店里的更新日志（格式 `v<版本号> <更新日志>`）。只想补一条日志时，手动运行 workflow 并勾上 `force`。
+- 发版先改 `package.json` 的 `version`，在 CHANGELOG 加一段 `## v<版本号>`。产物提交的说明是
+  `v<版本号> <触发构建的源码提交标题>`（后端主题规范：保留源码 commit 说明）；手动运行 workflow 时可另填一句，
+  只想重发一版时勾上 `force`。
+- 纯静态部署（GitHub Pages）：在仓库 Settings → Secrets and variables → Actions 配 `API_BASE`
+  （选填 `TITLE`、`BACKGROUND_IMAGE`），CI 会按静态部署构建、把它们写进 `index.html`；不配就是给 Workers 用的普通构建。
+  用 Pages 托管还要在 Settings → Pages 选 `dist` 分支，并在仓库 Settings → Actions → General 把 Workflow permissions 设为 Read and write。
 - 推 `main` 发布成功后，CI 给这一版的产物提交打上 `v<版本号>` 标签并发一条 GitHub Release（正文是 CHANGELOG 里这一段）。
   想收到更新通知，在仓库页面 Watch → Custom → 勾 Releases。Release 只是通知，主题怎么更新不受影响。
 - 产物分支只追加提交、不强推，锁在旧 SHA 的用户和主题商店里登记的历史版本一直可用。
 - 产物 `index.html` 里写有 `<meta name="theme-version">`，排查缓存时看它。
+
+## 同步原版
+
+本仓库的 `main` 接在原版 [volcano-1025/CFSM-Theme-LuminaPlus](https://github.com/volcano-1025/CFSM-Theme-LuminaPlus)
+的提交历史之后，原版更新时用 git 合并，git 会自动合并两边改了不同地方的部分：
+
+```bash
+git remote add upstream https://github.com/volcano-1025/CFSM-Theme-LuminaPlus.git   # 只需一次
+git fetch upstream
+git switch -c sync/upstream main
+git merge upstream/main
+```
+
+- 冲突最常出在 `CHANGELOG.md`、`README.md`（两边都留）、`src/pages/ThemeManage.tsx`（设置页）、
+  三个语言文件（两边新增的条目都留）和 `package.json`（用原版的版本号加 `+ipstack.1`，再 `npm install` 重新生成 lock）。
+- 合完跑 `npm test`、`npm run typecheck`、`npm run lint`、`npm run build`，再用 `?mock=1` 看一遍页面。
+  测试覆盖了 V4 / V6 标签、延迟线路显示、协议筛选与统计、离线提醒和各项请求规则。
+- 先推到 `preview` 分支，在后台用 `.../tree/dist-preview` 验收，没问题再合进 `main` 推送。
+- 发版号：原版 1.2.22 → 本仓库 `1.2.22+ipstack.1`；页脚的版本检查能识别它比 `1.2.21+ipstack.N` 新。
 
 ## 开发
 
@@ -140,7 +167,8 @@ npm test
 npm run build       # 产物只含 index.html + assets/
 ```
 
-- 没有后端时用 `http://localhost:5173/?mock=1` 看内置假数据；加 `&lang=en` / `es` / `zh` / `auto` 看不同语言。
+- 没有后端时用 `http://localhost:5173/?mock=1` 看内置假数据；加 `&lang=en` / `es` / `zh` / `auto` 看不同语言，
+  加 `&threenet=0` 模拟后台关掉三网详情。
 - 连线上后端：在根目录 `.env` 写 `API_BASE=https://你的后端`，后端要把 `http://localhost:5173` 加进跨域白名单。
 - 界面文案在 `src/i18n/messages/`（`zh.ts` 是键的来源，`en.ts` / `es.ts` 缺键会类型报错），代码里用 `t("键", { 参数 })`。
 - 后端适配集中在 `src/services/`：`cfsm/`（地址与凭证、请求、数据映射、WebSocket）、`api.ts`（查询函数）、

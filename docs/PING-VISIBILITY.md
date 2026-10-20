@@ -1,5 +1,7 @@
 # 首页延迟线路显示修复（1.2.21+ipstack.3）
 
+> 历史记录。ipstack.4 起改为按线路协议归属判断，现行规则见 [THEME-OPTIMIZATION.md](THEME-OPTIMIZATION.md)。
+
 用户报告：在卡片页将某 VPS 的 IPv6 设为隐藏，首页顶部 V6 标签消失，但该 VPS 的三个 V6 延迟/丢包仍在。ipstack.2 的实现仅控制标签，未满足用户要隐藏延迟线路的需求。
 
 ## 操作
