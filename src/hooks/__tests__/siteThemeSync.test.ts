@@ -12,6 +12,7 @@ import {
   SITE_BACKUP_SETTLE_MS,
   SITE_SYNC_MARKER_KEY,
   SITE_THEME_SYNC_DEBOUNCE_MS,
+  SYNC_CONFIG_MAX_AGE_MS,
   startSiteThemeAutoSync,
 } from "@/hooks/useSiteThemeOptions";
 import { ApiRequestError } from "@/services/cfsm/http";
@@ -159,10 +160,9 @@ describe("登录站长的改动自动同步到后端", () => {
     expect(getAllPingLineOverrides()).toEqual({});
   });
 
-  it("保存时不再请求 /api/config：拿本页缓存的那份当底", async () => {
+  it("页面刚打开就改：直接拿缓存的 config 当底，不多查", async () => {
     acceptWrites();
-    // 后端主题规范：/api/config 整个页面只查一次。站长 2026-10-20 选择接受代价：这台设备的旧副本
-    // 会盖掉站长这期间在别的设备上改的项（这里后端已是透明度 50，发出去的仍是缓存里的 100）。
+    // 后端主题规范：/api/config 整个页面只查一次。缓存不到 5 分钟，后端这边的变化（透明度 50）看不到也不去查。
     seedConfig({ surfaceOpacity: 100, enableHomepageMultiPing: true });
     mocks.getPublic.mockResolvedValue({
       theme_settings: { surfaceOpacity: 50, enableHomepageMultiPing: false },
@@ -179,6 +179,48 @@ describe("登录站长的改动自动同步到后端", () => {
       enableHomepageMultiPing: true,
       desktopNodeViewMode: "list",
     });
+  });
+
+  it("页面开久了第一次保存先重拉 config，别的设备改过的项不被旧副本盖掉", async () => {
+    acceptWrites();
+    seedConfig({ surfaceOpacity: 100, enableHomepageMultiPing: true });
+    stop = startSiteThemeAutoSync();
+    // 站长在别的设备上把透明度改成了 50。
+    mocks.getPublic.mockResolvedValue({
+      theme_settings: { surfaceOpacity: 50, enableHomepageMultiPing: true },
+      authorization: true,
+    } as unknown as PublicConfig);
+    vi.advanceTimersByTime(SYNC_CONFIG_MAX_AGE_MS + 1_000);
+
+    saveLocalThemeSettings({ desktopNodeViewMode: "list" });
+    await flushDebounce();
+
+    expect(mocks.getPublic).toHaveBeenCalledTimes(1);
+    expect(mocks.saveThemeOptions.mock.calls[0][0]).toMatchObject({
+      surfaceOpacity: 50,
+      desktopNodeViewMode: "list",
+    });
+
+    // 刚保存过，缓存算新的：紧接着的改动不再查。
+    saveLocalThemeSettings({ desktopNodeViewMode: "compact" });
+    await flushDebounce();
+    expect(mocks.getPublic).toHaveBeenCalledTimes(1);
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(2);
+  });
+
+  it("重拉 config 失败就不发，免得拿旧底盖掉后端", async () => {
+    acceptWrites();
+    stop = startSiteThemeAutoSync();
+    mocks.getPublic.mockRejectedValue(new Error("network"));
+    vi.advanceTimersByTime(SYNC_CONFIG_MAX_AGE_MS + 1_000);
+
+    saveLocalThemeSettings({ desktopNodeViewMode: "list" });
+    await flushDebounce();
+    // queryClient 对网络错误自动重试一次，等它也失败。
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
+    expect(getSiteThemeSyncStatus().phase).toBe("error");
   });
 
   it("缓存里还没有 config 时才查一次（就是这个页面的首次查询）", async () => {
