@@ -57,6 +57,7 @@ export const es: Messages = {
   "home.groupsLabel": "Grupos de servidores",
   "home.loadFailed": "Los datos de los servidores no están disponibles",
   "home.loadRetrying": "Esperando a que el backend reintente",
+  "home.loadRetryStopped": "Se detuvieron los reintentos automáticos. Usa el botón de abajo para intentarlo de nuevo",
   "home.openAssets": "Abrir estadísticas de activos",
   "home.assetsTitle": "Estadísticas de activos",
   "home.noNodes": "Aún no hay servidores conectados",

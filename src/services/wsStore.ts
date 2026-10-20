@@ -49,6 +49,8 @@ export interface StoreStatusSnapshot {
    * 是否继续。页面停在断开前的数据；这不是故障，别当「同步异常」提示。
    */
   realtimeSessionExpired: boolean;
+  /** 首屏快照连续失败到了上限，自动重试已停，等用户点重试（{@link retryNodeSync}）或切回前台。 */
+  syncRetryExhausted: boolean;
 }
 
 export interface HomeNodeSummary {
@@ -464,6 +466,7 @@ let storeStatusSnapshot: StoreStatusSnapshot = {
   realtimeConnected: false,
   partial: false,
   realtimeSessionExpired: false,
+  syncRetryExhausted: false,
 };
 let scrollIdleTimer: number | null = null;
 let scrollTrackingStarted = false;
@@ -1302,6 +1305,7 @@ function suspendRealtime() {
 function resumeRealtime() {
   if (!started || realtimePaused()) return;
   if (latestBaseByServerId.size > 0) updateWsSubscriptions(latestBaseByServerId);
+  if (!hydrated || partialSites) resetBootstrapRetries();
   if (!hydrated) void bootstrap();
   else void syncCurrentScope().catch(() => {});
 }
@@ -1388,8 +1392,17 @@ export function focusRealtimeNode(uuid: string): () => void {
 
 // 连续失败时指数退避(5s→10s→…→75s)，避免后端不可用期间持续打注定失败的请求。
 const BOOTSTRAP_MAX_BACKOFF_TICKS = 15;
+/**
+ * 连续失败这么多次就停止自动重试（约 4 分钟），等用户点「重试」或切回前台。
+ *
+ * 后端主题规范：重试要限次数。不限的话，后端挂掉（或多站里一个站长期下线）期间每个开着的标签页
+ * 都会每 75 秒打一次 `/api/servers` —— 多站时正常的那几个站会一直被白白查下去。
+ */
+export const BOOTSTRAP_MAX_ATTEMPTS = 6;
 let bootstrapBackoffTicks = 0;
 let bootstrapSkipTicks = 0;
+let bootstrapFailures = 0;
+let syncRetryExhausted = false;
 let bootstrapPromise: Promise<void> | null = null;
 
 /**
@@ -1426,13 +1439,38 @@ async function runBootstrap() {
     if (partialSites) throw new Error("partial snapshot");
     bootstrapBackoffTicks = 0;
     bootstrapSkipTicks = 0;
+    bootstrapFailures = 0;
+    setSyncRetryExhausted(false);
   } catch {
     bootstrapBackoffTicks = Math.min(
       bootstrapBackoffTicks > 0 ? bootstrapBackoffTicks * 2 : 1,
       BOOTSTRAP_MAX_BACKOFF_TICKS,
     );
     bootstrapSkipTicks = bootstrapBackoffTicks;
+    bootstrapFailures += 1;
+    if (bootstrapFailures >= BOOTSTRAP_MAX_ATTEMPTS) setSyncRetryExhausted(true);
   }
+}
+
+function setSyncRetryExhausted(next: boolean) {
+  if (syncRetryExhausted === next) return;
+  syncRetryExhausted = next;
+  commit(state, { storeStatus: true });
+}
+
+/** 重新开始一轮首屏重试：用户点了「重试」，或切回前台（用户回来看了，值得再试几次）。 */
+function resetBootstrapRetries() {
+  bootstrapBackoffTicks = 0;
+  bootstrapSkipTicks = 0;
+  bootstrapFailures = 0;
+  setSyncRetryExhausted(false);
+}
+
+/** 加载失败页上的「重试」：立刻试一次，失败了照常退避，直到再次到达上限。 */
+export function retryNodeSync(): void {
+  if (!started || realtimePaused()) return;
+  resetBootstrapRetries();
+  void bootstrap();
 }
 
 let started = false;
@@ -1464,6 +1502,7 @@ function ensureStarted() {
     if (realtimePaused()) return;
     // 只在还没拿到完整节点表时重试；成功之后不再定时拉（见 POLL_REFRESH_INTERVAL_MS）。
     if (!hydrated || partialSites) {
+      if (syncRetryExhausted) return;
       if (bootstrapSkipTicks > 0) {
         bootstrapSkipTicks -= 1;
         return;
@@ -1533,6 +1572,8 @@ function stopStore() {
   started = false;
   bootstrapBackoffTicks = 0;
   bootstrapSkipTicks = 0;
+  bootstrapFailures = 0;
+  syncRetryExhausted = false;
 }
 
 function subscribeSet(listeners: Set<Listener>, listener: Listener): () => void {
@@ -1601,7 +1642,8 @@ export function getStoreStatusSnapshot(): StoreStatusSnapshot {
     storeStatusSnapshot.nodeInfoError === nodeInfoError &&
     storeStatusSnapshot.realtimeConnected === realtimeConnected &&
     storeStatusSnapshot.partial === partialSites &&
-    storeStatusSnapshot.realtimeSessionExpired === sessionExpired
+    storeStatusSnapshot.realtimeSessionExpired === sessionExpired &&
+    storeStatusSnapshot.syncRetryExhausted === syncRetryExhausted
   ) {
     return storeStatusSnapshot;
   }
@@ -1612,6 +1654,7 @@ export function getStoreStatusSnapshot(): StoreStatusSnapshot {
     realtimeConnected,
     partial: partialSites,
     realtimeSessionExpired: sessionExpired,
+    syncRetryExhausted,
   };
   return storeStatusSnapshot;
 }

@@ -416,6 +416,40 @@ describe("快照同步", () => {
     await vi.advanceTimersByTimeAsync(0);
   });
 
+  it("stops retrying after the attempt limit and resumes on retry or tab return", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => {
+      throw new Error("backend down");
+    });
+    const store = await loadStore();
+    const release = store.retainStore();
+
+    // 退避重试到上限后停下：之后再等多久都不再请求（后端主题规范：重试要限次数）。
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(syncCount()).toBe(store.BOOTSTRAP_MAX_ATTEMPTS);
+    expect(store.getStoreStatusSnapshot().syncRetryExhausted).toBe(true);
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(syncCount()).toBe(store.BOOTSTRAP_MAX_ATTEMPTS);
+
+    // 用户点「重试」：立刻试一次，失败后照常退避，直到再次到上限。
+    store.retryNodeSync();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(syncCount()).toBe(store.BOOTSTRAP_MAX_ATTEMPTS + 1);
+    expect(store.getStoreStatusSnapshot().syncRetryExhausted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(syncCount()).toBe(store.BOOTSTRAP_MAX_ATTEMPTS * 2);
+
+    // 切回前台也重新开始一轮；这次成功了，标记清掉。
+    mocks.getServersSnapshot.mockImplementation(async () => snapshot());
+    setHidden(true);
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getStoreStatusSnapshot().hydrated).toBe(true);
+    expect(store.getStoreStatusSnapshot().syncRetryExhausted).toBe(false);
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
   it("keeps a site's nodes, socket and ping buffer when only that site misses a sync", async () => {
     const siteA = "https://a.example";
     const siteB = "https://b.example";

@@ -37,6 +37,7 @@ import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
 import { useHourlyClock } from "@/hooks/useClock";
 import { usePacedRate } from "@/hooks/usePacedRate";
 import { preloadAssetsPage } from "@/services/assetsPageLoader";
+import { retryNodeSync } from "@/services/wsStore";
 import { getLocalThemeSettings, saveLocalThemeSettings } from "@/services/themeSettingsStore";
 import { HomeSortControl } from "./HomeSortControl";
 import {
@@ -324,7 +325,7 @@ export function NodeGrid() {
   const nodes = useHomeNodeSummaries();
   const nodeOnlineSummaries = useNodeOnlineSummaries();
   const allMeta = useAllNodeMeta();
-  const { hydrated: storeHydrated, nodeInfoError } = useNodeStoreStatus();
+  const { hydrated: storeHydrated, nodeInfoError, syncRetryExhausted } = useNodeStoreStatus();
   const { data: me } = useAuth();
   const { data: publicConfig } = usePublicConfig();
   const siteName = publicConfig?.sitename?.trim() || t("home.defaultSiteName");
@@ -635,7 +636,20 @@ export function NodeGrid() {
         aria-live="polite"
       >
         <span className="text-[14px]">{t("home.loadFailed")}</span>
-        <span className="text-[12px]">{t("home.loadRetrying")}</span>
+        {syncRetryExhausted ? (
+          <>
+            <span className="text-[12px]">{t("home.loadRetryStopped")}</span>
+            <button
+              type="button"
+              onClick={retryNodeSync}
+              className="control-button mt-2 px-4 py-2 text-[13px] font-medium"
+            >
+              {t("common.retry")}
+            </button>
+          </>
+        ) : (
+          <span className="text-[12px]">{t("home.loadRetrying")}</span>
+        )}
       </div>
     );
   }

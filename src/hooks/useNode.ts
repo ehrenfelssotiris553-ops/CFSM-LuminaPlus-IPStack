@@ -121,6 +121,7 @@ const EMPTY_STORE_STATUS = {
   failureStreak: 0,
   hydrated: false,
   nodeInfoError: false,
+  syncRetryExhausted: false,
 } as const;
 
 /**

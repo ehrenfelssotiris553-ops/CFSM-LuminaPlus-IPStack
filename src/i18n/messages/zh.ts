@@ -59,6 +59,7 @@ export const zh = {
   "home.groupsLabel": "节点分组",
   "home.loadFailed": "节点数据暂时无法加载",
   "home.loadRetrying": "正在等待后端自动重试",
+  "home.loadRetryStopped": "已停止自动重试，可以点下面的按钮再试一次",
   "home.openAssets": "打开资产统计页",
   "home.assetsTitle": "资产统计",
   "home.noNodes": "尚未连接到任何节点",

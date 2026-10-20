@@ -57,6 +57,7 @@ export const en: Messages = {
   "home.groupsLabel": "Server groups",
   "home.loadFailed": "Server data is unavailable right now",
   "home.loadRetrying": "Waiting for the backend to retry",
+  "home.loadRetryStopped": "Automatic retries have stopped. Use the button below to try again",
   "home.openAssets": "Open asset statistics",
   "home.assetsTitle": "Asset statistics",
   "home.noNodes": "No servers connected yet",
