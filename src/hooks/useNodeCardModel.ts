@@ -126,10 +126,12 @@ export function useNodeCardModel(
   // buildPingBuckets 的「从数据自推跨度」。四种视图都走这里，口径统一。
   const latencyWindowMs = useLatencyWindowMs();
   const carrierNames = useCarrierNames();
+  // 后端关掉三网详情时 `servers[].ping` / `loss` 窗口是空的：后端主题规范要求这时不展示首页小图，
+  // 不拿实时样本自己攒一份顶上。单线路的当前延迟 / 丢包数值照常显示，只是不画柱子。
   const pingBuckets = usePingBuckets(
     ping,
     pingBucketCount,
-    !multiPingActive,
+    !multiPingActive && showThreeNetDetails,
     offlineSince,
     latencyWindowMs,
   );
