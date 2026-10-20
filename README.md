@@ -1,12 +1,13 @@
-# CFSM-Theme-LuminaPlus
+# CFSM-LuminaPlus-IPStack
 
-> **IPv4 / IPv6 独立显示定制版：v1.2.21+ipstack.2**
+> **LuminaPlus 的 IPv4 / IPv6 独立显示定制版**，基于原版 [CFSM-Theme-LuminaPlus](https://github.com/volcano-1025/CFSM-Theme-LuminaPlus) v1.2.21。
+> 当前版本和每版改动见 [CHANGELOG.md](CHANGELOG.md)。
 >
 > 新增「主题设置 → 卡片 → 首页 V4 / V6 标签」：两个全局开关，以及每台 VPS 各自的 IPv4 / IPv6 自动、显示、隐藏选项。
-> 大卡片、小卡片、迷你、列表均支持；保留旧配置的默认行为。同步修补本次依赖扫描发现的已知漏洞。
+> 大卡片、小卡片、迷你、列表均支持；保留旧配置的默认行为。
 >
-> 定制功能与安装方法见 [使用说明](docs/IP-STACK.md)，审查范围、证据和限制见 [安全审查](docs/SECURITY-REVIEW-2026-10-20.md)。
-> **下文原作者的安装地址会安装原版。安装本定制版需把本包构建产物放进自己的 GitHub 仓库，并使用自己的主题地址。**
+> 定制功能见 [使用说明](docs/IP-STACK.md)，审查范围、证据和限制见 [安全审查](docs/SECURITY-REVIEW-2026-10-20.md)。
+> 下文除安装地址外沿用原版说明；主题商店里的 **LuminaPlus** 是原版，不含本定制功能。
 
 [CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor) 的第三方主题，
 由 [Komari-Theme-LuminaPlus](https://github.com/shanyang242/Komari-Theme-LuminaPlus) 移植而来。
@@ -16,23 +17,19 @@
 
 ## 安装
 
-主题跟着你现有的 Workers 后端跑，不用自己构建或另找地方部署，二选一：
+主题跟着你现有的 Workers 后端跑，不用自己构建或另找地方部署：把下面的地址填进后台的自定义主题 URL。
 
-- **主题商店**：后台 `/admin#/admin` → 主题商店 → **LuminaPlus** → 安装并切换。
-- **自定义主题 URL**：把下面的地址填进后台的自定义主题 URL。
+```
+https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
+```
 
-  ```
-  https://github.com/volcano-1025/CFSM-Theme-LuminaPlus/tree/dist
-  ```
-
-  `dist` 是构建产物分支（源码在 `main`，别填错）。想锁定某一版，把 `dist` 换成那一版产物提交的 40 位 SHA；
-  各版本的 SHA 在 `dist` 分支的提交记录里，提交标题就是版本号。
+`dist` 是构建产物分支（源码在 `main`，别填错）。想锁定某一版，把 `dist` 换成那一版产物提交的 40 位 SHA；
+各版本的 SHA 在 `dist` 分支的提交记录里，提交标题就是版本号。
 
 站点标题、图标、背景图、自定义 head / script 由后台「外观设置」下发，主题不覆盖。
 
 ### 更新
 
-- **主题商店装的**：回主题商店更新一次。
 - **填 `tree/dist` 的**：Workers 对分支地址缓存约一小时，过了缓存自动是新版；等不及就临时换成新版的 SHA。
 - **锁在 SHA 上的**：要手动换成新 SHA，否则一直停在旧版。
 

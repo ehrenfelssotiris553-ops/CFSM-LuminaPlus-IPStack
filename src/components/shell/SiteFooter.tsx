@@ -15,7 +15,8 @@ import { formatVersionLabel } from "@/utils/versionCompare";
  */
 
 const BACKEND_REPO_URL = "https://github.com/huilang-me/CF-Server-Monitor";
-const THEME_REPO_URL = "https://github.com/volcano-1025/CFSM-Theme-LuminaPlus";
+// 指向本定制版仓库：版本号和「新版」提醒都按定制版算，README 里注明了原版出处。
+const THEME_REPO_URL = "https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack";
 const THEME_CHANGELOG_URL = `${THEME_REPO_URL}/blob/main/CHANGELOG.md`;
 
 export function SiteFooter() {

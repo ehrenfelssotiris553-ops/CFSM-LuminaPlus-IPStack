@@ -6,6 +6,17 @@ describe("compareVersions", () => {
     expect(compareVersions("1.2.21+ipstack.1", "1.2.21")).toBe(0);
     expect(isNewerVersion("1.2.22", "1.2.21+ipstack.1")).toBe(true);
   });
+  it("orders releases of the same customization line by their serial", () => {
+    expect(isNewerVersion("1.2.21+ipstack.5", "1.2.21+ipstack.4")).toBe(true);
+    expect(isNewerVersion("1.2.21+ipstack.10", "1.2.21+ipstack.9")).toBe(true);
+    expect(isNewerVersion("1.2.21+ipstack.4", "1.2.21+ipstack.4")).toBe(false);
+    expect(isNewerVersion("1.2.21+ipstack.3", "1.2.21+ipstack.4")).toBe(false);
+    // 正式版号更大时不看后缀。
+    expect(isNewerVersion("1.2.22+ipstack.1", "1.2.21+ipstack.9")).toBe(true);
+  });
+  it("treats different customization lines as the same build", () => {
+    expect(compareVersions("1.2.21+other.7", "1.2.21+ipstack.4")).toBe(0);
+  });
   it("compares numeric segments, padding the shorter one with zeros", () => {
     expect(compareVersions("1.2.15", "1.2.9")).toBeGreaterThan(0);
     expect(compareVersions("1.2", "1.2.0")).toBe(0);
