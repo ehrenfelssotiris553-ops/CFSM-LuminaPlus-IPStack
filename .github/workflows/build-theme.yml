@@ -7,16 +7,23 @@ name: Build theme
 # preview 分支同理，产物发到 dist-preview，用来在后台临时切地址验收，
 # 不会动到线上用的 dist。
 #
-# 产物提交的说明就是主题商店里的「更新日志」和版本下拉的标题，格式是
-#   v<package.json 的 version> <更新日志>
-# 更新日志默认取本次源码提交的标题；手动触发时可以在 changelog 里另写一句。
+# 产物提交的说明格式是
+#   v<package.json 的 version> <触发本次构建的源码提交标题>
+# 后端主题规范要求产物提交保留源码的 commit 说明；手动触发时取当时 HEAD 的提交标题，
+# 也可以在 changelog 里另写一句。CHANGELOG.md 只用于下面发 GitHub Release 的正文。
+#
+# 纯静态部署（GitHub Pages）：在仓库 Settings → Secrets and variables → Actions 里配置 API_BASE
+# （选填 TITLE、BACKGROUND_IMAGE、CSP_API、CSP_STATIC），构建时会把它们写进 index.html，
+# 地址不进仓库文件。不配置 API_BASE 就是普通构建，供 Workers 后台用 tree/dist 加载。
+# 用 Pages 托管时还要在 Settings → Pages 选 dist 分支作为来源，并在每个 Worker 的
+# CORS_ALLOWED_ORIGINS 里加上 Pages 域名。
 on:
   push:
     branches: [main, preview]
   workflow_dispatch:
     inputs:
       changelog:
-        description: "更新日志（留空则用最近一次源码提交的标题）"
+        description: "产物提交说明（留空则用 HEAD 源码提交的标题）"
         required: false
         type: string
       force:
@@ -62,15 +69,8 @@ jobs:
         run: |
           set -euo pipefail
           version="v$(node -p "require('./package.json').version")"
-          # 优先级：手动填的 changelog > CHANGELOG.md 里对应版本的第一行 > 源码提交标题。
+          # 优先级：手动填的说明 > 触发本次构建的源码提交标题（后端主题规范：保留源码 commit 说明）。
           note="${CHANGELOG:-}"
-          if [ -z "${note}" ] && [ -f CHANGELOG.md ]; then
-            note="$(awk -v want="## ${version}" '
-              $0 == want { found = 1; next }
-              found && /^## / { exit }
-              found && NF { print; exit }
-            ' CHANGELOG.md)"
-          fi
           [ -n "${note}" ] || note="$(git log -1 --pretty=%s)"
           {
             echo "message<<RELEASE_NOTE_EOF"
@@ -93,8 +93,20 @@ jobs:
       - name: Test
         run: npm test
 
+      # 运行时配置只从仓库 Secrets 注入，不写进仓库文件；没配 API_BASE 就是 Workers 用的普通构建。
       - name: Build
-        run: npm run build
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          TITLE: ${{ secrets.TITLE }}
+          BACKGROUND_IMAGE: ${{ secrets.BACKGROUND_IMAGE }}
+          CSP_API: ${{ secrets.CSP_API }}
+          CSP_STATIC: ${{ secrets.CSP_STATIC }}
+        run: |
+          if [ -n "${API_BASE}" ]; then
+            npm run build:github-page
+          else
+            npm run build
+          fi
 
       # 主题目录只允许 index.html 和 assets/，构建配置若被改坏要在这里拦下来。
       - name: Verify build output
