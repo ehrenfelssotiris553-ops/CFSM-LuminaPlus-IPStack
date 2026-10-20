@@ -14,7 +14,7 @@ import { speedRateColor } from "@/utils/metricTone";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
-import { IpStackBadges } from "./IpStackBadges";
+import { IpStackBadges, ipStackAriaText } from "./IpStackBadges";
 import { formatOsLabel, joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import type { PingOverviewTaskLoadState } from "@/types/cfsm";
@@ -265,8 +265,10 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const listPingStatus = formatListPingStatus(ping.lastValue, listPingState);
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
+  const stackAria = ipStackAriaText(model.ipStack);
   const rowLabel = [
     node.name,
+    ...(stackAria ? [stackAria] : []),
     t("list.ariaOs", { os: formatOsLabel(osName, node.os) }),
     `CPU ${pctText(node.cpuPct)}`,
     `${t("metric.memory")} ${pctText(node.ramPct)}`,

@@ -8,6 +8,9 @@ import {
 } from "@/utils/format";
 import { resolveTrafficUsage } from "@/utils/traffic";
 import { InstancePanel } from "./InstancePanel";
+import { IpStackBadges } from "@/components/node/IpStackBadges";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { resolveIpStackVisibility } from "@/utils/ipStack";
 
 // Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const timeFormatter = memoByLanguage(
@@ -29,6 +32,7 @@ export function InstanceDetails({
 }) {
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
+  const { showIpv4, showIpv6, homepageIpStackOverrides } = useThemeSettings();
   const isReady = Boolean(meta && metrics);
 
   useEffect(() => {
@@ -50,6 +54,8 @@ export function InstanceDetails({
   );
   const lastUpdated =
     metrics.updatedAt > 0 ? timeFormatter().format(metrics.updatedAt) : "—";
+  // 和首页卡片同一套规则（全站默认 + 每台单独设置），首页显示什么这里就显示什么。
+  const ipStack = resolveIpStackVisibility(meta, { showIpv4, showIpv6, homepageIpStackOverrides });
   const trimmedName = meta.name?.trim();
   const panelTitle = trimmedName
     ? t("instance.panelTitle", { name: trimmedName })
@@ -69,6 +75,18 @@ export function InstanceDetails({
           <InfoRow
             label={t("instance.status")}
             value={isOnline ? t("status.online") : t("status.offline")}
+          />
+          <InfoRow
+            label={t("instance.ipStack")}
+            value={
+              ipStack.ipv4 || ipStack.ipv6 ? (
+                <span className="instance-ip-stack">
+                  <IpStackBadges {...ipStack} />
+                </span>
+              ) : (
+                "—"
+              )
+            }
           />
           <InfoRow
             label="CPU"

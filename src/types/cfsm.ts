@@ -504,6 +504,12 @@ export interface ThemeSettings {
   showPingIpv6?: boolean;
   homepagePingGroupOverrides?: Record<string, { ipv4?: boolean; ipv6?: boolean }>;
   homepagePingProtocols?: Record<string, "ipv4" | "ipv6" | "other">;
+  /** 首页按 IPv4 / IPv6 筛选的标签栏。 */
+  showIpStackFilter?: boolean;
+  /** 首页总览「在线节点」卡上的双栈 / 仅 V4 / 仅 V6 统计。 */
+  showIpStackStats?: boolean;
+  /** 有节点离线时浏览器标签页标题前加「(N 离线)」。 */
+  showOfflineCountInTitle?: boolean;
   homeGroupOrder?: string[];
   /** 首页地区栏的顺序（地区代码），在首页直接拖动得到；没列进去的按默认规则排在后面。 */
   homeRegionOrder?: string[];

@@ -444,7 +444,12 @@ export function installDevMockApi() {
     }
 
     if (url.pathname === "/api/servers") {
-      const servers = SERVERS.map((server, index) => buildServerPayload(server, index));
+      // `?mock=1&threenet=0` 模拟后台关掉三网详情：后端这时不查窗口，ping / loss 是空数组。
+      const threeNetDetails = new URLSearchParams(window.location.search).get("threenet") !== "0";
+      const servers = SERVERS.map((server, index) => {
+        const payload = buildServerPayload(server, index);
+        return threeNetDetails ? payload : { ...payload, ping: [], loss: [] };
+      });
       const online = servers.filter((server) => Date.now() - server.last_updated < 300_000);
       return json({
         servers,
@@ -467,6 +472,7 @@ export function installDevMockApi() {
           show_expire: true,
           show_tf: true,
           show_time: true,
+          show_three_net_details: threeNetDetails,
           display_mode: "bar",
         },
       });

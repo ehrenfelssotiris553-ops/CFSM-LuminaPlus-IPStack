@@ -1097,3 +1097,39 @@
   min-width: 22px;
   height: 22px;
 }
+
+/* ---- IPStack 定制：首页协议筛选与统计 ---- */
+
+/* 协议筛选 + 排序放在控件栏最后一列（和原来排序单独占的位置一样）。 */
+.home-controls-end {
+  display: flex;
+  grid-column: -2 / -1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-controls-end .home-stack-tabs {
+  flex: 1 1 auto;
+}
+
+.home-controls-end .home-sort {
+  flex: 0 0 auto;
+}
+
+/* 窄屏时控件栏是一行 flex：分组一行，协议筛选和排序另起一行。 */
+@media (max-width: 768px) {
+  .home-controls-bar.has-stack-tabs {
+    flex-wrap: wrap;
+  }
+
+  .home-controls-bar .home-controls-end {
+    flex: 1 1 100%;
+  }
+}
+
+.overview-stack-stats {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,3 +1,5 @@
+import { IpStackEditor } from "@/components/theme/IpStackEditor";
+import { OfflineNotifyToggle } from "@/components/theme/OfflineNotifyToggle";
 import { PingDisplayEditor } from "@/components/theme/PingDisplayEditor";
 import { t } from "@/i18n";
 import {
@@ -26,6 +28,7 @@ import {
   CloudAlert,
   CloudDownload,
   CloudOff,
+  BellRing,
   EyeOff,
   Grid3x3,
   LayoutTemplate,
@@ -117,7 +120,7 @@ import {
 } from "@/utils/overviewRating";
 import { HOME_SORT_FIELDS, homeSortFieldLabel } from "@/utils/homeSort";
 import { applyPingVisibilityEdits, diffPingVisibility, LOCAL_PING_VISIBILITY_EDITS_KEY, LOCAL_PING_GROUP_EDITS_KEY, LOCAL_PING_PROTOCOL_EDITS_KEY } from "@/utils/pingVisibility";
-import { applyIpStackEdits, diffIpStackOverrides, getIpStackOverride, ipStackMode, LOCAL_IP_STACK_EDITS_KEY, setIpStackMode, type IpStackMode } from "@/utils/ipStack";
+import { applyIpStackEdits, diffIpStackOverrides, LOCAL_IP_STACK_EDITS_KEY } from "@/utils/ipStack";
 
 const APPEARANCE_OPTIONS = [
   // label 写成 getter：每次读都按当前界面语言取。
@@ -325,6 +328,9 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showPingIpv6: settings.showPingIpv6,
     homepagePingGroupOverrides: settings.homepagePingGroupOverrides,
     homepagePingProtocols: settings.homepagePingProtocols,
+    showIpStackFilter: settings.showIpStackFilter,
+    showIpStackStats: settings.showIpStackStats,
+    showOfflineCountInTitle: settings.showOfflineCountInTitle,
     homeGroupOrder: settings.homeGroupOrder,
     homeRegionOrder: settings.homeRegionOrder,
     homeDefaultGroup: settings.homeDefaultGroup,
@@ -962,7 +968,6 @@ export function ThemeManage() {
   const [taskSearch, setTaskSearch] = useState("");
   const [nodeSearch, setNodeSearch] = useState("");
   const [premiumSearch, setPremiumSearch] = useState("");
-  const [ipStackSearch, setIpStackSearch] = useState("");
   // 访客的「已保存到本机」：这次会话存过一次才显示（站长那边看同步状态）。
   const [savedLocally, setSavedLocally] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1212,10 +1217,6 @@ export function ThemeManage() {
   const filteredPremiumClients = useMemo(
     () => filterClients(sortedClients, premiumSearch),
     [premiumSearch, sortedClients],
-  );
-  const ipStackClients = useMemo(
-    () => filterClients(sortedClients, ipStackSearch),
-    [sortedClients, ipStackSearch],
   );
 
   // 溢价表格里"当前剩余价值"仅供参考,用已保存的汇率源/忽略名单算(不用草稿里还没保存的
@@ -1832,6 +1833,24 @@ export function ThemeManage() {
                   </div>
                 </div>
               </InstancePanel>
+              <InstancePanel
+                id="set-browser-alerts"
+                kicker={t("settings.kickerAppearance")}
+                title={t("settings.browserAlertsTitle")}
+                aside={<BellRing size={16} />}
+              >
+                <p className="setting-hint mb-3">{t("settings.browserAlertsHint")}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <ToggleRow
+                    field="showOfflineCountInTitle"
+                    title={t("settings.showOfflineCountInTitle")}
+                    desc={t("settings.showOfflineCountInTitleDesc")}
+                    checked={draft.showOfflineCountInTitle}
+                    onPatch={patch}
+                  />
+                  <OfflineNotifyToggle />
+                </div>
+              </InstancePanel>
             </>
           )}
 
@@ -2171,91 +2190,6 @@ export function ThemeManage() {
           {activeTab === "card" && (
             <>
               <InstancePanel
-                id="set-ip-stack"
-                kicker={t("settings.kickerCard")}
-                title={t("settings.ipStackTitle")}
-                aside={<Network size={16} />}
-              >
-                <p className="setting-hint mb-3">{t("settings.ipStackHint")}</p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <ToggleRow
-                    field="showIpv4"
-                    title={t("settings.showIpv4")}
-                    desc={t("settings.ipStackDefaultDesc")}
-                    checked={draft.showIpv4}
-                    onPatch={patch}
-                  />
-                  <ToggleRow
-                    field="showIpv6"
-                    title={t("settings.showIpv6")}
-                    desc={t("settings.ipStackDefaultDesc")}
-                    checked={draft.showIpv6}
-                    onPatch={patch}
-                  />
-                </div>
-                <div className="setting-subhead mt-4">
-                  <span className="setting-subhead-title">{t("settings.ipStackPerNode")}</span>
-                  <button
-                    type="button"
-                    className="control-button px-3 py-1 text-[12px]"
-                    disabled={Object.keys(draft.homepageIpStackOverrides).length === 0}
-                    onClick={() => patch("homepageIpStackOverrides", {})}
-                  >
-                    {t("settings.ipStackReset")}
-                  </button>
-                </div>
-                <input
-                  type="search"
-                  aria-label={t("settings.ipStackSearch")}
-                  placeholder={t("settings.ipStackSearch")}
-                  value={ipStackSearch}
-                  onChange={(event) => setIpStackSearch(event.target.value)}
-                  className="surface-inset mt-3 w-full px-3 py-2 text-[13px] outline-none"
-                />
-                <div className="mt-3 grid gap-2">
-                  {clientsLoading ? <Spinner size={18} /> : null}
-                  {!clientsLoading && ipStackClients.length === 0 ? (
-                    <p className="setting-hint">{t("settings.ipStackEmpty")}</p>
-                  ) : null}
-                  {ipStackClients.map((client) => {
-                    const override = getIpStackOverride(draft.homepageIpStackOverrides, client.uuid);
-                    return (
-                      <div
-                        key={client.uuid}
-                        className="surface-inset grid min-w-0 grid-cols-2 items-center gap-3 px-3 py-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem]"
-                      >
-                        <div className="col-span-2 min-w-0 md:col-span-1">
-                          <div className="truncate text-[13px] font-medium" title={client.name}>{client.name}</div>
-                          <div className="setting-hint mt-1">{t("settings.ipStackDetected", {
-                            ipv4: client.ipv4 ? "V4 ✓" : "V4 —",
-                            ipv6: client.ipv6 ? "V6 ✓" : "V6 —",
-                          })}</div>
-                        </div>
-                        {(["ipv4", "ipv6"] as const).map((protocol) => (
-                          <label key={protocol} className="min-w-0">
-                            <span className="setting-hint mb-1 block">{protocol === "ipv4" ? "IPv4" : "IPv6"}</span>
-                            <SettingSelect
-                              aria-label={`${client.name} ${protocol === "ipv4" ? "IPv4" : "IPv6"}`}
-                              value={ipStackMode(override[protocol])}
-                              onChange={(event) => patch("homepageIpStackOverrides", setIpStackMode(
-                                draft.homepageIpStackOverrides,
-                                client.uuid,
-                                protocol,
-                                event.target.value as IpStackMode,
-                              ))}
-                            >
-                              <option value="auto">{t("settings.ipStackAuto")}</option>
-                              <option value="show">{t("settings.ipStackShow")}</option>
-                              <option value="hide">{t("settings.ipStackHide")}</option>
-                            </SettingSelect>
-                          </label>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </InstancePanel>
-              <InstancePanel
                 id="set-card"
                 kicker={t("settings.kickerCard")}
                 title={t("settings.cardItems")}
@@ -2311,6 +2245,15 @@ export function ThemeManage() {
                   </div>
                 </div>
               </InstancePanel>
+              <IpStackEditor
+                settings={draft}
+                clients={sortedClients}
+                loading={clientsLoading}
+                onChange={(updates) => {
+                  editVersionRef.current += 1;
+                  setDraft((previous) => ({ ...previous, ...updates }));
+                }}
+              />
             </>
           )}
 
@@ -2454,18 +2397,6 @@ export function ThemeManage() {
 
           {activeTab === "ping" && (
             <>
-              <PingDisplayEditor
-                settings={draft}
-                clients={sortedClients}
-                tasks={sortedTasks}
-                loading={clientsLoading}
-                lineOverrides={sourceThemeSettings.homepagePingLineOverrides}
-                localLineOverrides={localLineOverrides}
-                onChange={(updates) => {
-                  editVersionRef.current += 1;
-                  setDraft((previous) => ({ ...previous, ...updates }));
-                }}
-              />
               <InstancePanel
                 id="set-ping"
                 kicker={t("settings.kickerLines")}
@@ -2759,6 +2690,18 @@ export function ThemeManage() {
 
                 </div>
               </InstancePanel>
+              <PingDisplayEditor
+                settings={draft}
+                clients={sortedClients}
+                tasks={sortedTasks}
+                loading={clientsLoading}
+                lineOverrides={sourceThemeSettings.homepagePingLineOverrides}
+                localLineOverrides={localLineOverrides}
+                onChange={(updates) => {
+                  editVersionRef.current += 1;
+                  setDraft((previous) => ({ ...previous, ...updates }));
+                }}
+              />
             </>
           )}
         </div>

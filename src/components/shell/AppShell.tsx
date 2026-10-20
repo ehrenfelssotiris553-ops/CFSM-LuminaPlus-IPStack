@@ -11,6 +11,7 @@ import { useAppearance } from "@/hooks/useAppearance";
 import { useAuth } from "@/hooks/useAuth";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useSiteMetadata } from "@/hooks/useSiteMetadata";
+import { useOfflineNotifications } from "@/hooks/useOfflineAlerts";
 import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
 import { useMetricColorsSync } from "@/hooks/useMetricColors";
 import { useNodeStoreStatus } from "@/hooks/useNode";
@@ -19,6 +20,7 @@ import { getAdminUrl } from "@/services/cfsm/config";
 export function AppShell() {
   useAppearance();
   useSiteMetadata();
+  useOfflineNotifications();
   useMetricColorsSync();
   const { pathname, search } = useLocation();
   const publicConfig = usePublicConfig();

@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { getStaticSiteTitle } from "@/services/cfsm/config";
 import { THEME_FALLBACK_TITLE } from "@/utils/themeMeta";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { useVisibleOnlineStates } from "@/hooks/useOfflineAlerts";
+import { countOfflineNodes, formatSiteTitle } from "@/utils/offlineAlerts";
 
 // 站点标题由后台外观设置提供（纯静态部署可用 TITLE 指定）；这里只是它还没到达时的占位。
 const FALLBACK_TITLE = THEME_FALLBACK_TITLE;
@@ -16,18 +19,23 @@ function updateMeta(selector: string, attr: "content", value: string) {
 
 export function useSiteMetadata() {
   const { data: config } = usePublicConfig();
+  const { showOfflineCountInTitle } = useThemeSettings();
+  // 只在首页 / 详情页有实时数据时算（见 useVisibleOnlineStates）；设置页上不加前缀。
+  const { active, nodes } = useVisibleOnlineStates();
+  const offlineCount = active ? countOfflineNodes(nodes) : 0;
 
   useEffect(() => {
     // 纯静态部署指定过 TITLE 就用它，否则挂载后会被后台站点标题盖掉、只在首屏闪一下。
     const siteName = getStaticSiteTitle() || config?.sitename?.trim() || FALLBACK_TITLE;
     const description = config?.description?.trim() || FALLBACK_DESCRIPTION;
 
-    document.title = siteName;
+    // 只改标签页标题；分享卡片、添加到主屏的名字仍是站点名本身。
+    document.title = formatSiteTitle(siteName, offlineCount, showOfflineCountInTitle);
     updateMeta('meta[name="apple-mobile-web-app-title"]', "content", siteName);
     updateMeta('meta[property="og:title"]', "content", siteName);
     updateMeta('meta[name="twitter:title"]', "content", siteName);
     updateMeta('meta[name="description"]', "content", description);
     updateMeta('meta[property="og:description"]', "content", description);
     updateMeta('meta[name="twitter:description"]', "content", description);
-  }, [config?.sitename, config?.description]);
+  }, [config?.sitename, config?.description, offlineCount, showOfflineCountInTitle]);
 }

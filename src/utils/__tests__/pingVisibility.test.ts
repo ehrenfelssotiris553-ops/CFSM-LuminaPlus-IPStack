@@ -100,3 +100,27 @@ describe("legacy browser choices", () => {
     expect(migrated.__luminaplusPingGroupEdits).toEqual({ a: { ipv6: true } });
   });
 });
+
+describe("explainHomepagePingVisibility", () => {
+  it("names the rule layer that decided, in the same order as isHomepagePingVisible", async () => {
+    const { explainHomepagePingVisibility, isHomepagePingVisible } = await import("@/utils/pingVisibility");
+    const settings = {
+      showPingIpv4: true,
+      showPingIpv6: false,
+      homepagePingGroupOverrides: { a: { ipv4: false } },
+      homepagePingProtocols: { "1": "ipv4", "2": "ipv6", "3": "other" } as const,
+      homepagePingVisibilityOverrides: { a: { "2": true } },
+    };
+    const cases = [
+      ["a", 2, { visible: true, source: "line", protocol: "ipv6" }],
+      ["a", 1, { visible: false, source: "group", protocol: "ipv4" }],
+      ["b", 1, { visible: true, source: "global", protocol: "ipv4" }],
+      ["b", 2, { visible: false, source: "global", protocol: "ipv6" }],
+      ["b", 3, { visible: true, source: "other", protocol: "other" }],
+    ] as const;
+    for (const [uuid, taskId, expected] of cases) {
+      expect(explainHomepagePingVisibility(uuid, taskId, settings)).toEqual(expected);
+      expect(isHomepagePingVisible(uuid, taskId, settings)).toBe(expected.visible);
+    }
+  });
+});

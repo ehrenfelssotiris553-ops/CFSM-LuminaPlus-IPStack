@@ -134,6 +134,9 @@ export interface ResolvedThemeSettings {
   showPingIpv6: boolean;
   homepagePingGroupOverrides: IpStackOverridesByNode;
   homepagePingProtocols: PingProtocols;
+  showIpStackFilter: boolean;
+  showIpStackStats: boolean;
+  showOfflineCountInTitle: boolean;
   homeGroupOrder: string[];
   /** 地区栏顺序：在首页拖动地区标签得到（见 mergeHomeRegionOrder）。空 = 按默认地理优先级。 */
   homeRegionOrder: string[];
@@ -194,6 +197,9 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showPingIpv6: true,
   homepagePingGroupOverrides: {},
   homepagePingProtocols: {},
+  showIpStackFilter: true,
+  showIpStackStats: true,
+  showOfflineCountInTitle: true,
   homeGroupOrder: [],
   homeRegionOrder: [],
   homeDefaultGroup: "",
@@ -364,6 +370,9 @@ export function normalizeThemeSettings(
     showPingIpv6: enabledUnlessFalse(settings?.showPingIpv6),
     homepagePingGroupOverrides: normalizeIpStackOverrides(settings?.homepagePingGroupOverrides),
     homepagePingProtocols: normalizePingProtocols(settings?.homepagePingProtocols),
+    showIpStackFilter: enabledUnlessFalse(settings?.showIpStackFilter),
+    showIpStackStats: enabledUnlessFalse(settings?.showIpStackStats),
+    showOfflineCountInTitle: enabledUnlessFalse(settings?.showOfflineCountInTitle),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     homeRegionOrder: normalizeHomeRegionOrder(settings?.homeRegionOrder),
     homeDefaultGroup: normalizeHomeDefaultGroup(settings?.homeDefaultGroup),

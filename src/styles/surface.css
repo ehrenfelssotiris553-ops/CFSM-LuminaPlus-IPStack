@@ -2359,3 +2359,115 @@ body::after {
     white-space: normal;
   }
 }
+
+/* ---- IPStack 定制：设置页 ---- */
+
+/* 折叠块（每台 VPS、协议归属、其余线路）：去掉浏览器自带的 ▶，换成和设置页其他箭头一致的 chevron。 */
+.setting-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.setting-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.setting-disclosure > summary::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 0 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.6;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+.setting-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* V4 / V6 标签：每台一行。宽屏「名称 | IPv4 | IPv6」三列，窄屏名称占一行、两个协议各占一行。 */
+.ip-stack-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 12px;
+}
+.ip-stack-row-info {
+  min-width: 0;
+}
+.ip-stack-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+.ip-stack-row-effect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ip-stack-row-effect .ip-stack-badge {
+  height: 18px;
+  padding: 0 0.375rem;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.ip-stack-row-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ip-stack-mode {
+  padding: 3px;
+  gap: 2px;
+}
+.ip-stack-mode button {
+  min-height: 26px;
+  padding: 0 10px;
+}
+.ip-stack-mode button[data-active="true"] {
+  background: color-mix(in srgb, var(--accent-500) 12%, var(--surface-elev));
+  color: var(--text-primary);
+}
+
+/* 按分组批量设置：分组 | IPv4 | IPv6 | 应用。 */
+.ip-stack-bulk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .ip-stack-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ip-stack-row-control {
+    justify-content: space-between;
+  }
+  .ip-stack-bulk {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .ip-stack-bulk > :first-child,
+  .ip-stack-bulk > button {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 详情页「网络协议」：和首页一样的 V4 / V6 标签，排在一行。 */
+.instance-ip-stack {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+.instance-ip-stack .ip-stack-badge {
+  height: 20px;
+  border-radius: 6px;
+}

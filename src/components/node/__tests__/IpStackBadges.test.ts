@@ -13,4 +13,11 @@ describe("IP badges", () => {
     const html = renderToStaticMarkup(createElement(IpStackBadges, { ipv4, ipv6 }));
     expect([...html.matchAll(/>(V[46])</g)].map((match) => match[1])).toEqual(expected);
   });
+
+  it("tells V4 and V6 apart by colour and by a readable label", () => {
+    const html = renderToStaticMarkup(createElement(IpStackBadges, { ipv4: true, ipv6: true }));
+    expect(html).toMatch(/data-tag="green"[^>]*>V4</);
+    expect(html).toMatch(/data-tag="blue"[^>]*>V6</);
+    expect(html).toContain('aria-label="');
+  });
 });

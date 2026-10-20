@@ -49,6 +49,13 @@ import { MiniNodeCard } from "./MiniNodeCard";
 import { NodeCard } from "./NodeCard";
 import { NodeListView } from "./NodeListView";
 import { RegionTabs } from "./RegionTabs";
+import {
+  countIpStackCategories,
+  IP_STACK_CATEGORIES,
+  ipStackCategory,
+  resolveIpStackCapability,
+  type IpStackCategory,
+} from "@/utils/ipStack";
 import { RenewalReminder } from "./RenewalReminder";
 import type { NodeViewMode } from "@/utils/themeSettings";
 import type { RenewalReminderSource } from "@/utils/renewalReminder";
@@ -118,8 +125,11 @@ function HomeOverviewCards({
   renewalReminderDays,
   renewalNodes,
   dense,
+  stackCounts,
 }: {
   overview: HomeOverview;
+  /** 双栈 / 仅 V4 / 仅 V6 节点数；不显示统计时为 null。 */
+  stackCounts: Record<IpStackCategory, number> | null;
   costSummary: { remainingCny: number } | null;
   costLoading: boolean;
   costRatesMissing: boolean;
@@ -178,6 +188,12 @@ function HomeOverviewCards({
         })
       : null;
 
+  const stackStatsLabel = stackCounts
+    ? IP_STACK_CATEGORIES.filter((category) => stackCounts[category] > 0)
+        .map((category) => stackCountLabel(category, stackCounts[category]))
+        .join(" · ")
+    : "";
+
   const renderRating = (rating: OverviewRating | null) =>
     rating ? (
       <span className="overview-card-rating" data-rating-level={rating.level} title={rating.label}>
@@ -220,6 +236,13 @@ function HomeOverviewCards({
             <span className="overview-bar-offline" style={{ width: `${offlinePct}%` }} />
           </div>
         )}
+        {stackStatsLabel ? (
+          <div className="overview-card-footer">
+            <p className="overview-card-sub overview-stack-stats" title={stackStatsLabel}>
+              {stackStatsLabel}
+            </p>
+          </div>
+        ) : null}
       </article>
 
       <article className="overview-card" data-metric="bandwidth">
@@ -320,6 +343,51 @@ function GroupTabs({
   );
 }
 
+const STACK_ALL = "all";
+type StackFilter = typeof STACK_ALL | (typeof IP_STACK_CATEGORIES)[number];
+
+function stackCountLabel(category: (typeof IP_STACK_CATEGORIES)[number], n: number): string {
+  return t(
+    category === "dual" ? "home.stack.dualCount" : category === "ipv4" ? "home.stack.ipv4Count" : "home.stack.ipv6Count",
+    { n },
+  );
+}
+
+/** 首页按协议筛选：全部 / 双栈 / 仅 V4 / 仅 V6，按钮上带当前分组、地区下的数量。样式和分组标签一致。 */
+function StackTabs({
+  counts,
+  selected,
+  onSelect,
+}: {
+  counts: Record<IpStackCategory, number>;
+  selected: StackFilter;
+  onSelect: (value: StackFilter) => void;
+}) {
+  return (
+    <div className="home-group-tabs home-stack-tabs" role="group" aria-label={t("home.stack.filterLabel")}>
+      <button
+        type="button"
+        aria-pressed={selected === STACK_ALL}
+        data-active={selected === STACK_ALL ? "true" : "false"}
+        onClick={() => onSelect(STACK_ALL)}
+      >
+        {t("home.stack.all")}
+      </button>
+      {IP_STACK_CATEGORIES.filter((category) => counts[category] > 0 || selected === category).map((category) => (
+        <button
+          key={category}
+          type="button"
+          aria-pressed={selected === category}
+          data-active={selected === category ? "true" : "false"}
+          onClick={() => onSelect(category)}
+        >
+          {stackCountLabel(category, counts[category])}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function NodeGrid() {
   const now = useHourlyClock();
   const nodes = useHomeNodeSummaries();
@@ -338,6 +406,7 @@ export function NodeGrid() {
   const sortDirection = sortEnabled ? sort.direction : themeSettings.homeSortDirection;
   const [selectedGroup, setSelectedGroup] = useState(HOME_ALL_GROUP);
   const [selectedRegion, setSelectedRegion] = useState(HOME_ALL_REGION);
+  const [selectedStack, setSelectedStack] = useState<StackFilter>(STACK_ALL);
   useHomepagePingOverview(mode);
 
   // 摘要不含名称，先从完整 meta 解析主题隐藏列表，再统一过滤各类数据。
@@ -372,6 +441,19 @@ export function NodeGrid() {
     for (const node of visibleMeta) map.set(node.uuid, node.name?.trim() || node.uuid);
     return map;
   }, [visibleMeta]);
+  // 每台节点属于双栈 / 仅 V4 / 仅 V6 哪一类：单台设置优先、自动看后端标记（见 resolveIpStackCapability）。
+  const ipStackOverrides = themeSettings.homepageIpStackOverrides;
+  const stackByUuid = useMemo(() => {
+    const map = new Map<string, IpStackCategory>();
+    for (const node of visibleMeta) {
+      map.set(node.uuid, ipStackCategory(resolveIpStackCapability(node, ipStackOverrides)));
+    }
+    return map;
+  }, [ipStackOverrides, visibleMeta]);
+  const overviewStackCounts = useMemo(
+    () => countIpStackCategories(visibleMeta, ipStackOverrides),
+    [ipStackOverrides, visibleMeta],
+  );
   const overview = useMemo<HomeOverview>(() => {
     let onlineNodes = 0;
     let offlineNodes = 0;
@@ -517,12 +599,25 @@ export function NodeGrid() {
     },
     [homeRegionOrder, regionOptions],
   );
-  const filteredNodes = useMemo(
+  const regionFilteredNodes = useMemo(
     () =>
       selectedRegion === HOME_ALL_REGION
         ? groupFilteredNodes
         : groupFilteredNodes.filter((node) => getDisplayRegionCode(node.region) === selectedRegion),
     [groupFilteredNodes, selectedRegion],
+  );
+  // 协议筛选在分组、地区之后：按钮上的数量反映当前分组 / 地区里的分布，和地区栏的计数口径一致。
+  const stackCounts = useMemo(() => {
+    const counts: Record<IpStackCategory, number> = { dual: 0, ipv4: 0, ipv6: 0, none: 0 };
+    for (const node of regionFilteredNodes) counts[stackByUuid.get(node.uuid) ?? "none"] += 1;
+    return counts;
+  }, [regionFilteredNodes, stackByUuid]);
+  const filteredNodes = useMemo(
+    () =>
+      selectedStack === STACK_ALL
+        ? regionFilteredNodes
+        : regionFilteredNodes.filter((node) => stackByUuid.get(node.uuid) === selectedStack),
+    [regionFilteredNodes, selectedStack, stackByUuid],
   );
   // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
   const orderedNodes = useHomeNodeOrder({
@@ -563,6 +658,14 @@ export function NodeGrid() {
     }
   }, [themeSettings.showGroupTabs, selectedGroup]);
 
+  // 协议筛选被关掉、或这一类节点在全站都没了，回到全部，别留一个看不见的过滤条件。
+  useEffect(() => {
+    if (selectedStack === STACK_ALL) return;
+    if (!themeSettings.showIpStackFilter || overviewStackCounts[selectedStack] === 0) {
+      setSelectedStack(STACK_ALL);
+    }
+  }, [overviewStackCounts, selectedStack, themeSettings.showIpStackFilter]);
+
   // 卡片列表只随 UUID 集合/顺序变化；卡片内部各自订阅实时数据。
   const uuidsKey = useMemo(
     () => orderedNodes.map((node) => node.uuid).join(UUID_KEY_SEPARATOR),
@@ -602,6 +705,11 @@ export function NodeGrid() {
   // 地区栏:只有一个地区时筛选无意义,>1 才显示。
   const showRegionBar =
     themeSettings.isReady && themeSettings.showRegionBar && regionOptions.length > 1;
+  // 全站只有一种协议（比如全是双栈）时筛选没意义，不显示。
+  const stackKinds = (["dual", "ipv4", "ipv6", "none"] as const).filter(
+    (category) => overviewStackCounts[category] > 0,
+  ).length;
+  const showStackTabs = themeSettings.isReady && themeSettings.showIpStackFilter && stackKinds > 1;
   // 分组标签栏与卡片网格共用列定义，让标签栏左缘对齐首卡。
   const isMini = mode === "mini";
   const isList = mode === "list";
@@ -680,6 +788,12 @@ export function NodeGrid() {
             themeSettings.isReady ? themeSettings.renewalReminderDays : 0
           }
           renewalNodes={renewalNodes}
+          stackCounts={
+            themeSettings.showIpStackStats &&
+            overviewStackCounts.dual + overviewStackCounts.ipv4 + overviewStackCounts.ipv6 > 0
+              ? overviewStackCounts
+              : null
+          }
           costSummary={costSummary}
           costLoading={costLoading}
           costRatesMissing={costRatesMissing}
@@ -710,9 +824,12 @@ export function NodeGrid() {
   return (
     <>
       {homeHeader}
-      {(showGroupTabs || showHomeSort) && (
-        // 分组标签落首列、排序钉在末列右侧；窄屏时两者保持在同一控件栏内。
-        <div className={controlsWrapClassName} style={controlsStyle}>
+      {(showGroupTabs || showHomeSort || showStackTabs) && (
+        // 分组标签落首列、排序钉在末列右侧；窄屏时两者保持在同一控件栏内，协议筛选另起一行。
+        <div
+          className={showStackTabs ? `${controlsWrapClassName} has-stack-tabs` : controlsWrapClassName}
+          style={controlsStyle}
+        >
           {showGroupTabs && (
             <GroupTabs
               groups={groupOptions}
@@ -720,7 +837,15 @@ export function NodeGrid() {
               onSelectGroup={setSelectedGroup}
             />
           )}
-          {showHomeSort && <HomeSortControl state={sort} />}
+          {showStackTabs ? (
+            // 协议筛选和排序共用最后一列，不然两张卡宽的屏幕上排序会被挤到单独一行。
+            <div className="home-controls-end">
+              <StackTabs counts={stackCounts} selected={selectedStack} onSelect={setSelectedStack} />
+              {showHomeSort && <HomeSortControl state={sort} />}
+            </div>
+          ) : (
+            showHomeSort && <HomeSortControl state={sort} />
+          )}
         </div>
       )}
       {showRegionBar && (

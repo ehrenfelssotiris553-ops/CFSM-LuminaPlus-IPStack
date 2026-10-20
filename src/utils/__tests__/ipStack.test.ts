@@ -50,3 +50,37 @@ describe("homepage IPv4 / IPv6 visibility", () => {
     expect(normalizeIpStackOverrides({ a: inherited })).toEqual({ a: { ipv6: false } });
   });
 });
+
+describe("IPv4 / IPv6 capability for filtering and stats", () => {
+  it("follows per-node overrides first and ignores the global badge switches", async () => {
+    const { resolveIpStackCapability, ipStackCategory } = await import("@/utils/ipStack");
+    // 全站关掉了 V4 标签也不代表节点没有 IPv4：筛选和统计照旧算它双栈。
+    expect(resolveIpStackCapability(dual, {})).toEqual({ ipv4: true, ipv6: true });
+    expect(resolveIpStackCapability(dual, { a: { ipv6: false } })).toEqual({ ipv4: true, ipv6: false });
+    expect(resolveIpStackCapability({ uuid: "b" }, { b: { ipv6: true } })).toEqual({ ipv4: false, ipv6: true });
+    expect(ipStackCategory({ ipv4: true, ipv6: true })).toBe("dual");
+    expect(ipStackCategory({ ipv4: true, ipv6: false })).toBe("ipv4");
+    expect(ipStackCategory({ ipv4: false, ipv6: true })).toBe("ipv6");
+    expect(ipStackCategory({ ipv4: false, ipv6: false })).toBe("none");
+  });
+
+  it("counts each category once per node", async () => {
+    const { countIpStackCategories } = await import("@/utils/ipStack");
+    const nodes = [
+      dual,
+      { uuid: "b", ipv4: "1", ipv6: "" },
+      { uuid: "c", ipv4: "", ipv6: "1" },
+      { uuid: "d" },
+    ];
+    expect(countIpStackCategories(nodes, {})).toEqual({ dual: 1, ipv4: 1, ipv6: 1, none: 1 });
+    expect(countIpStackCategories(nodes, { d: { ipv4: true } })).toEqual({ dual: 1, ipv4: 2, ipv6: 1, none: 0 });
+  });
+
+  it("applies one mode to many nodes and leaves an unset protocol alone", async () => {
+    const { setIpStackModeForNodes } = await import("@/utils/ipStack");
+    const before = { a: { ipv6: true }, c: { ipv4: false } };
+    const after = setIpStackModeForNodes(before, ["a", "b"], { ipv4: "hide", ipv6: null });
+    expect(after).toEqual({ a: { ipv4: false, ipv6: true }, b: { ipv4: false }, c: { ipv4: false } });
+    expect(setIpStackModeForNodes(after, ["a", "b"], { ipv4: "auto", ipv6: "auto" })).toEqual({ c: { ipv4: false } });
+  });
+});

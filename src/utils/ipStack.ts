@@ -121,3 +121,58 @@ export function resolveIpStackVisibility(
     ipv6: override.ipv6 ?? (settings.showIpv6 && Boolean(node.ipv6)),
   };
 }
+
+/**
+ * 节点「有哪种协议」：单台设了显示 / 隐藏就以它为准，自动时看后端标记。
+ *
+ * 和 {@link resolveIpStackVisibility} 的区别是不看全站「默认显示 V4 / V6 标签」开关 —— 那两个开关决定标签画不画，
+ * 不代表节点没有这种协议。首页按协议筛选、总览统计都用这个口径。
+ */
+export function resolveIpStackCapability(
+  node: { uuid: string; ipv4?: string | null; ipv6?: string | null },
+  overrides: IpStackOverridesByNode,
+): IpStackVisibility {
+  const override = getIpStackOverride(overrides, node.uuid);
+  return {
+    ipv4: override.ipv4 ?? Boolean(node.ipv4),
+    ipv6: override.ipv6 ?? Boolean(node.ipv6),
+  };
+}
+
+export type IpStackCategory = "dual" | "ipv4" | "ipv6" | "none";
+export const IP_STACK_CATEGORIES = ["dual", "ipv4", "ipv6"] as const;
+
+export function ipStackCategory(stack: IpStackVisibility): IpStackCategory {
+  if (stack.ipv4 && stack.ipv6) return "dual";
+  if (stack.ipv4) return "ipv4";
+  if (stack.ipv6) return "ipv6";
+  return "none";
+}
+
+/** 各协议类别的节点数；没有任何标记的节点不计入三类，单独记在 `none`。 */
+export function countIpStackCategories(
+  nodes: readonly { uuid: string; ipv4?: string | null; ipv6?: string | null }[],
+  overrides: IpStackOverridesByNode,
+): Record<IpStackCategory, number> {
+  const counts: Record<IpStackCategory, number> = { dual: 0, ipv4: 0, ipv6: 0, none: 0 };
+  for (const node of nodes) counts[ipStackCategory(resolveIpStackCapability(node, overrides))] += 1;
+  return counts;
+}
+
+/**
+ * 一次给多台节点设同一个模式（设置页「按分组批量设置」）。`mode` 为 null 表示这个协议不动。
+ */
+export function setIpStackModeForNodes(
+  byNode: IpStackOverridesByNode,
+  uuids: readonly string[],
+  modes: Partial<Record<keyof IpStackVisibility, IpStackMode | null>>,
+): IpStackOverridesByNode {
+  let next = byNode;
+  for (const uuid of uuids) {
+    for (const protocol of ["ipv4", "ipv6"] as const) {
+      const mode = modes[protocol];
+      if (mode) next = setIpStackMode(next, uuid, protocol, mode);
+    }
+  }
+  return next;
+}
