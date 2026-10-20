@@ -117,7 +117,7 @@ export function cfUsageResetTime(locale: string, now = new Date()): string {
 export type CfUsageErrorKind = "notConfigured" | "loginExpired" | "unavailable" | "failed";
 
 /**
- * 出错原因分三类给面板显示：
+ * 出错原因分四类给面板显示：
  * - notConfigured：后台没填 CF Token 或 Account ID；
  * - loginExpired：登录过期（401）。有令牌时请求层会清掉它、首页随即按访客显示；只剩 Cookie 的登录没东西可清，在这里提示；
  * - unavailable：后台接口没了或返回格式变了（探针升级改了接口）；
