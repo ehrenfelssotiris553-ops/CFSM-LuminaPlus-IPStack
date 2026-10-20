@@ -7,8 +7,8 @@ export function usePublicConfig() {
   return useQuery<PublicConfig>({
     queryKey: ["public"],
     queryFn: ({ signal }) => getPublic({ signal }),
-    // 整个页面生命周期只查一次（后端主题规范）。需要新的一份时由明确的事件触发：站长同步前重拉、
-    // 人机验证通过 / 凭证失效、登录态变化（见 queryClient）。
+    // 整个页面生命周期只查一次（后端主题规范；站长同步设置也用这份缓存，不再重拉）。需要新的一份时
+    // 由明确的事件触发：人机验证通过 / 凭证失效、登录态变化（见 queryClient）。
     staleTime: Number.POSITIVE_INFINITY,
   });
 }

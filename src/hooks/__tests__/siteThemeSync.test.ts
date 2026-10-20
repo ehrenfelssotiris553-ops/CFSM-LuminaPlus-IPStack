@@ -120,12 +120,9 @@ describe("登录站长的改动自动同步到后端", () => {
     expect(getLocalThemeSettings()).toEqual({});
   });
 
-  it("merges a node badge edit into the fresh backend snapshot", async () => {
+  it("merges a node badge edit into the site snapshot per node and protocol", async () => {
     acceptWrites();
-    seedConfig({ homepageIpStackOverrides: { a: { ipv4: true } } });
-    mocks.getPublic.mockResolvedValue({
-      theme_settings: { homepageIpStackOverrides: { a: { ipv4: true, ipv6: false }, b: { ipv4: false } } },
-    } as unknown as PublicConfig);
+    seedConfig({ homepageIpStackOverrides: { a: { ipv4: true, ipv6: false }, b: { ipv4: false } } });
     stop = startSiteThemeAutoSync();
     saveLocalThemeSettings({ [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: false } } });
     await flushDebounce();
@@ -162,11 +159,11 @@ describe("登录站长的改动自动同步到后端", () => {
     expect(getAllPingLineOverrides()).toEqual({});
   });
 
-  it("发之前重拉 config 当底：别的设备改过的项不被这台的旧副本盖掉", async () => {
+  it("保存时不再请求 /api/config：拿本页缓存的那份当底", async () => {
     acceptWrites();
-    // 这台设备几小时前拿到的 config：透明度 100、多线路开着。
+    // 后端主题规范：/api/config 整个页面只查一次。站长 2026-10-20 选择接受代价：这台设备的旧副本
+    // 会盖掉站长这期间在别的设备上改的项（这里后端已是透明度 50，发出去的仍是缓存里的 100）。
     seedConfig({ surfaceOpacity: 100, enableHomepageMultiPing: true });
-    // 之后站长在别的设备上改成了透明度 50、关掉多线路。
     mocks.getPublic.mockResolvedValue({
       theme_settings: { surfaceOpacity: 50, enableHomepageMultiPing: false },
     } as unknown as PublicConfig);
@@ -175,37 +172,38 @@ describe("登录站长的改动自动同步到后端", () => {
     saveLocalThemeSettings({ desktopNodeViewMode: "list" });
     await flushDebounce();
 
-    expect(mocks.getPublic).toHaveBeenCalledTimes(1);
+    expect(mocks.getPublic).not.toHaveBeenCalled();
     expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(1);
     expect(mocks.saveThemeOptions.mock.calls[0][0]).toMatchObject({
-      surfaceOpacity: 50,
-      enableHomepageMultiPing: false,
+      surfaceOpacity: 100,
+      enableHomepageMultiPing: true,
       desktopNodeViewMode: "list",
     });
   });
 
-  it("重拉 config 失败就不发，改动留在本机等重试", async () => {
+  it("缓存里还没有 config 时才查一次（就是这个页面的首次查询）", async () => {
     acceptWrites();
-    const fetchConfig = mocks.getPublic.getMockImplementation();
-    mocks.getPublic.mockRejectedValue(new ApiRequestError("bad gateway", 502, "/api/config"));
+    queryClient.clear();
+    mocks.getPublic.mockResolvedValue({
+      theme_settings: { surfaceOpacity: 80 },
+      authorization: true,
+    } as unknown as PublicConfig);
     stop = startSiteThemeAutoSync();
 
     saveLocalThemeSettings({ desktopNodeViewMode: "list" });
     await flushDebounce();
-    // 5xx 按 queryClient 的默认规则重试一次，都失败才报错。
-    await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(mocks.getPublic).toHaveBeenCalledTimes(2);
-    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
-    expect(getSiteThemeSyncStatus().phase).toBe("error");
-    expect(getLocalThemeSettings()).toEqual({ desktopNodeViewMode: "list" });
+    expect(mocks.getPublic).toHaveBeenCalledTimes(1);
+    expect(mocks.saveThemeOptions.mock.calls[0][0]).toMatchObject({
+      surfaceOpacity: 80,
+      desktopNodeViewMode: "list",
+    });
 
-    mocks.getPublic.mockImplementation(fetchConfig!);
-    retrySiteThemeSync();
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(1);
-    expect(getLocalThemeSettings()).toEqual({});
+    // 第二次改动直接用缓存。
+    saveLocalThemeSettings({ desktopNodeViewMode: "compact" });
+    await flushDebounce();
+    expect(mocks.getPublic).toHaveBeenCalledTimes(1);
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(2);
   });
 
   it("未登录的访客只存本机，不发请求", async () => {
@@ -448,10 +446,11 @@ describe("后端被别人整份改掉时从本机备份恢复", () => {
 describe("observed configuration conflicts", () => {
   it("pauses overlapping edits until the admin explicitly chooses to keep local edits", async () => {
     seedConfig({ costRateApiUrl: "https://old.example/rates" });
-    mocks.getPublic.mockImplementation(async () => ({ ...queryClient.getQueryData<PublicConfig>(["public"]), theme_settings: { costRateApiUrl: "https://remote.example/rates" } }));
     acceptWrites();
     stop = startSiteThemeAutoSync();
     saveLocalThemeSettings({ costRateApiUrl: "https://local.example/rates" });
+    // 改完之后缓存被刷新过（比如别的标签页登录触发重查），拿到了别的设备改过的那份。
+    seedConfig({ costRateApiUrl: "https://remote.example/rates" });
     await flushDebounce();
     expect(getSiteThemeSyncStatus().phase).toBe("conflict");
     expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
@@ -469,9 +468,9 @@ describe("observed configuration conflicts", () => {
   });
   it("can discard local conflicts without writing to the backend", async () => {
     seedConfig({ costRateApiUrl: "https://old.example/rates" });
-    mocks.getPublic.mockImplementation(async () => ({ ...queryClient.getQueryData<PublicConfig>(["public"]), theme_settings: { costRateApiUrl: "https://remote.example/rates" } }));
     stop = startSiteThemeAutoSync();
     saveLocalThemeSettings({ costRateApiUrl: "https://local.example/rates" });
+    seedConfig({ costRateApiUrl: "https://remote.example/rates" });
     await flushDebounce();
     expect(getSiteThemeSyncStatus().phase).toBe("conflict");
     resolveSiteThemeConflict(false);

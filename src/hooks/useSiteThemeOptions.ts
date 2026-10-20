@@ -217,10 +217,10 @@ function handleLocalEdit() {
  * 把「站点配置 + 本机改动」整份发到后端（`POST /api/theme_options`），成功后本机改动清掉、以后端为准。
  *
  * - 同一时刻只跑一个请求：途中又改过就等这次回来再发一轮，两次请求乱序到达会让旧快照盖掉新的；
- * - **发之前重拉一次 `/api/config` 当底**：快照整份替换后端的 theme_options，拿缓存里那份当底的话，
- *   页面开了几个小时，站长这期间在别的设备上改的会被这台设备的旧副本静默盖掉（config 缓存不会自己刷新）。
- *   刚保存完那两分钟里后端可能回旧的一份，getPublic 那时以自己写进去的为准（见 api 的 THEME_OPTIONS_WRITE_TRUST_MS）；
- *   拉不到就不发，报错等重试 —— 拿旧底发出去正是要避免的事；
+ * - **拿缓存里的 `/api/config` 当底，不在发之前重拉**：后端主题规范要求 `/api/config` 整个页面只查一次。
+ *   代价（站长 2026-10-20 选择接受）：快照整份替换后端的 theme_options，页面开了很久的这台设备，会把站长
+ *   这期间在别的设备上改的项用自己的旧副本盖掉。缓存因登录状态变化等被刷新过时，下面的冲突检查仍会拦下；
+ *   缓存还没有（直接打开就改）时才查一次，那就是这个页面的首次查询；
  * - 成功后**先写 config 缓存、再丢本机**，反过来中间那次渲染是「旧站点配置 + 空的本机」，页面会闪回旧设置；
  *   只丢发出去的那份，请求途中又改过的留着下一轮一起发；
  * - 快照和站点现有的一样就不发（比如颜色又调回了站点色），本机那份照样清掉；
@@ -236,10 +236,9 @@ async function runSync() {
   const seq = editSeq;
   setSyncStatus({ phase: "saving", error: null });
   try {
-    const config = await queryClient.fetchQuery<PublicConfig>({
+    const config = await queryClient.ensureQueryData<PublicConfig>({
       queryKey: ["public"],
       queryFn: ({ signal }) => getPublic({ signal }),
-      staleTime: 0,
     });
     const localSettings = getLocalThemeSettings();
     const localLineOverrides = getAllPingLineOverrides();
