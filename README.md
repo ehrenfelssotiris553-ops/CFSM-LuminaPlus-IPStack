@@ -5,6 +5,7 @@
 >
 > 新增「主题设置 → 卡片 → 首页 V4 / V6 标签」：两个全局开关，以及每台 VPS 各自的 IPv4 / IPv6 自动、显示、隐藏选项。
 > 大卡片、小卡片、迷你、列表均支持；保留旧配置的默认行为。
+> 另有只给登录站长看的首页 CF 用量卡片和 Agent 更新提醒（「主题设置 → 首页 → 站长专属信息」）。
 >
 > 定制功能见 [使用说明](docs/IP-STACK.md)，审查范围、证据和限制见 [安全审查](docs/SECURITY-REVIEW-2026-10-20.md)。
 > 下文除安装地址外沿用原版说明；主题商店里的 **LuminaPlus** 是原版，不含本定制功能。
@@ -74,6 +75,7 @@ https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
 | 站点配置、登录态、主题预设 | `GET /api/config` |
 | 节点列表与指标、首页延迟窗口 | `GET /api/servers` |
 | 详情页那一台（直接打开、切回前台补数据） | `GET /api/server?id=` |
+| 首页 CF 用量（定制版，只给登录站长，可关） | `POST /admin/api`（`action: d1_usage`） |
 | 实时推送 | `GET /api/ws` |
 | 详情页的系统资源 / Ping 历史（两张图同一档位共用一次查询） | `GET /api/history/all` |
 
@@ -90,6 +92,9 @@ https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
   首页和详情页的延迟、丢包对不上是正常的（窗口一格约 6 分钟，详情页约 30 秒一行），以详情页为准。
 - 未登录访客只能查 24 小时以内的历史，登录后可选到 7 天。
 - 节点在线与否按后端最近 5 分钟有没有收到它的上报判断，不看节点自己的时钟。
+- **定制版唯一的例外**：首页 CF 用量卡片调用后台的 `/admin/api`（和后台「查询 CF 用量」按钮同一个请求），规范不允许主题这样做。
+  只在登录站长打开首页、且开着这项时才查，默认每次打开查一次，可改成只手动或定时，也可以在设置里整个关掉。
+  访客不会触发；后台接口哪天改了，只有这张卡片报错。见 [docs/IP-STACK.md](docs/IP-STACK.md)。
 
 ## 与 Komari 版的差异
 

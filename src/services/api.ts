@@ -2,12 +2,14 @@ import { migratePingDisplaySettings } from "@/utils/pingVisibility";
 import { z } from "zod";
 import {
   CfsmServerSchema,
+  CfUsageResponseSchema,
   HistoryRowSchema,
   LatestReportUpdateSchema,
   ServersResponseSchema,
   SiteConfigSchema,
   SysConfigSchema,
   type CfsmServer,
+  type CfUsage,
   type HistoryRow,
   type LatestReportUpdate,
   type LoadRecordsResponse,
@@ -186,6 +188,7 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
     description: "",
     version: config.version,
     latestVersion: config.last_workers_version,
+    latestAgentVersion: config.last_agent_version,
     private_site: !config.is_public,
     authorization: config.authorization,
     turnstile_enabled: config.turnstile_enabled,
@@ -225,6 +228,29 @@ export function resolveMe(config: Pick<PublicConfig, "authorization"> | undefine
   if (!getJwtToken()) return LOGGED_OUT;
   if (!config) return undefined;
   return config.authorization ? LOGGED_IN : LOGGED_OUT;
+}
+
+/* ------------------------------------------------------------------ *
+ * CF 用量（只给登录站长）
+ * ------------------------------------------------------------------ */
+
+/** 后端要连查两次 Cloudflare 统计接口（今天、昨天），比普通请求慢，多给点时间。 */
+const CF_USAGE_TIMEOUT_MS = 20_000;
+
+/**
+ * 和后台「查询 CF 用量」按钮同一个请求：不带 Token / Account ID，后端用站长保存的那份。
+ * **偏离主题规范**：`/admin/api` 不在允许的 6 个接口里。只在登录站长打开首页、且开着这项时调用，
+ * 不耗 D1 额度；后台接口哪天改了，这里校验不过就报错，只影响用量面板。
+ * 多后端部署只查主后端。
+ */
+export async function getCfUsage(options?: RequestOptions): Promise<CfUsage> {
+  const result = await cfsmPost(
+    "/admin/api",
+    { action: "d1_usage" },
+    CfUsageResponseSchema,
+    { timeout: CF_USAGE_TIMEOUT_MS, ...options },
+  );
+  return result.usage;
 }
 
 /* ------------------------------------------------------------------ *

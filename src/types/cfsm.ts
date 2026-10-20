@@ -291,6 +291,38 @@ export const SiteConfigSchema = z
 
 export type SiteConfig = z.output<typeof SiteConfigSchema>;
 
+/**
+ * 后台「查询 CF 用量」（`POST /admin/api`，`action: d1_usage`）的返回：一天（UTC）的 Cloudflare 用量。
+ * 后端拿站长保存的 CF Token 查 Cloudflare 统计接口，DO 请求数是它按计费规则估出来的。
+ * 这是后台专用接口，不在主题规范的 6 个接口里（定制版有意偏离，见 docs/IP-STACK.md）。
+ */
+export const CfUsageDaySchema = z
+  .object({
+    rowsRead: looseNumber.default(0),
+    rowsWritten: looseNumber.default(0),
+    workersRequests: looseNumber.default(0),
+    durableObjectsRequests: looseNumber.default(0),
+    durableObjectsHttpRequests: looseNumber.default(0),
+    durableObjectsHibernationWakeups: looseNumber.default(0),
+    durableObjectsInboundWebSocketMessages: looseNumber.default(0),
+    /** 收到的 WebSocket 消息按多少条折成一次 DO 请求（Cloudflare 计费规则，后端写死 20）。 */
+    durableObjectsRequestBillingRatio: looseNumber.default(20),
+  })
+  .passthrough();
+
+export type CfUsageDay = z.output<typeof CfUsageDaySchema>;
+
+export const CfUsageResponseSchema = z
+  .object({
+    usage: z.object({
+      today: CfUsageDaySchema,
+      yesterday: CfUsageDaySchema,
+    }),
+  })
+  .passthrough();
+
+export type CfUsage = z.output<typeof CfUsageResponseSchema>["usage"];
+
 /** `/api/history/all` 的一行；字段随后端列定义，缺失时按 0 处理。 */
 export const HistoryRowSchema = z
   .object({
@@ -510,6 +542,13 @@ export interface ThemeSettings {
   showIpStackStats?: boolean;
   /** 有节点离线时浏览器标签页标题前加「(N 离线)」。 */
   showOfflineCountInTitle?: boolean;
+  /** 首页「CF 用量」面板，只有登录站长看得到。 */
+  showCfUsage?: boolean;
+  /** CF 用量什么时候查：open = 每次打开首页查一次，manual = 只在点刷新时查，interval = 每 cfUsageRefreshMinutes 分钟查一次。 */
+  cfUsageRefreshMode?: "open" | "manual" | "interval";
+  cfUsageRefreshMinutes?: number;
+  /** 登录站长在首页看到「N 台 Agent 可更新」。 */
+  showAgentUpdateHint?: boolean;
   homeGroupOrder?: string[];
   /** 首页地区栏的顺序（地区代码），在首页直接拖动得到；没列进去的按默认规则排在后面。 */
   homeRegionOrder?: string[];
@@ -697,6 +736,8 @@ export interface PublicConfig {
   description: string;
   version: string;
   latestVersion: string;
+  /** 最新 Agent 版本，后端只对登录站长下发；访客、老后端为空串。 */
+  latestAgentVersion: string;
   private_site: boolean;
   /** 这次请求带的令牌后端认不认（`/api/config` 的 `authorization`）。登录态由它推导，见 `resolveMe`。 */
   authorization: boolean;

@@ -11,6 +11,9 @@ import { InstancePanel } from "./InstancePanel";
 import { IpStackBadges } from "@/components/node/IpStackBadges";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { resolveIpStackVisibility } from "@/utils/ipStack";
+import { useAuth } from "@/hooks/useAuth";
+import { usePublicConfig } from "@/hooks/usePublicConfig";
+import { formatVersionLabel, isNewerVersion } from "@/utils/versionCompare";
 
 // Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const timeFormatter = memoByLanguage(
@@ -32,7 +35,10 @@ export function InstanceDetails({
 }) {
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
-  const { showIpv4, showIpv6, homepageIpStackOverrides } = useThemeSettings();
+  const { showIpv4, showIpv6, homepageIpStackOverrides, showAgentUpdateHint } = useThemeSettings();
+  const { data: me } = useAuth();
+  const { data: config } = usePublicConfig();
+  const isOwner = me?.logged_in === true;
   const isReady = Boolean(meta && metrics);
 
   useEffect(() => {
@@ -98,6 +104,18 @@ export function InstanceDetails({
           {/* 原来这里是「虚拟化」，但 CF-Server-Monitor 不上报该字段(见 toNodeInfo)，
               永远显示「—」。换成后端确实下发、之前一直没用上的内核版本。 */}
           <InfoRow label={t("instance.kernel")} value={meta.kernel_version || "—"} />
+          {/* Agent 版本只给登录站长看：最新版本号也只有站长拿得到，访客看了也没法处理。 */}
+          {isOwner ? (
+            <InfoRow
+              label={t("instance.agentVersion")}
+              value={
+                <AgentVersionValue
+                  version={meta.agent_version}
+                  latest={showAgentUpdateHint ? (config?.latestAgentVersion ?? "") : ""}
+                />
+              }
+            />
+          ) : null}
         </div>
 
         <div className="instance-info-group">
@@ -154,6 +172,21 @@ export function InstanceDetails({
         </div>
       </div>
     </InstancePanel>
+  );
+}
+
+function AgentVersionValue({ version, latest }: { version: string; latest: string }) {
+  if (!version) return <>—</>;
+  const outdated = isNewerVersion(latest, version);
+  return (
+    <span className="instance-agent-version">
+      {formatVersionLabel(version)}
+      {outdated ? (
+        <span className="ip-stack-badge" data-tag="amber" title={t("agentUpdate.badgeTitle", { version: formatVersionLabel(latest) })}>
+          {t("agentUpdate.badge", { version: formatVersionLabel(latest) })}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

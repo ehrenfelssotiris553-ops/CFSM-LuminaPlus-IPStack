@@ -2471,3 +2471,12 @@ body::after {
   height: 20px;
   border-radius: 6px;
 }
+
+/* 详情页 Agent 版本：版本号后面跟「可更新」标签（只有登录站长看得到）。 */
+.instance-agent-version {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}

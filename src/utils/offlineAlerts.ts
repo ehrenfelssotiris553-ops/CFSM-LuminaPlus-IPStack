@@ -40,7 +40,7 @@ export function findOnlineTransitions(
 const NOTIFY_NAME_LIMIT = 5;
 
 /** 通知正文：节点名列出前几台，多了写「等 N 台」。 */
-export function formatNodeNames(nodes: readonly NodeOnlineState[]): string {
+export function formatNodeNames(nodes: readonly Pick<NodeOnlineState, "name">[]): string {
   const names = nodes.slice(0, NOTIFY_NAME_LIMIT).map((node) => node.name);
   const joined = names.join(t("settings.listJoiner"));
   return nodes.length > NOTIFY_NAME_LIMIT ? t("notify.andMore", { names: joined, n: nodes.length }) : joined;

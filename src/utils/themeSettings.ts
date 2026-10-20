@@ -19,6 +19,12 @@ import {
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
 import {
+  DEFAULT_CF_USAGE_REFRESH_MINUTES,
+  normalizeCfUsageRefreshMinutes,
+  normalizeCfUsageRefreshMode,
+  type CfUsageRefreshMode,
+} from "@/utils/cfUsage";
+import {
   DEFAULT_RENEWAL_REMINDER_DAYS,
   MAX_RENEWAL_REMINDER_DAYS,
 } from "@/utils/renewalReminder";
@@ -137,6 +143,13 @@ export interface ResolvedThemeSettings {
   showIpStackFilter: boolean;
   showIpStackStats: boolean;
   showOfflineCountInTitle: boolean;
+  /** 首页 CF 用量面板（只有登录站长看得到）。 */
+  showCfUsage: boolean;
+  cfUsageRefreshMode: CfUsageRefreshMode;
+  /** 定时刷新的间隔（分钟），只在 cfUsageRefreshMode = interval 时用。 */
+  cfUsageRefreshMinutes: number;
+  /** 首页「N 台 Agent 可更新」（只有登录站长看得到）。 */
+  showAgentUpdateHint: boolean;
   homeGroupOrder: string[];
   /** 地区栏顺序：在首页拖动地区标签得到（见 mergeHomeRegionOrder）。空 = 按默认地理优先级。 */
   homeRegionOrder: string[];
@@ -200,6 +213,10 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showIpStackFilter: true,
   showIpStackStats: true,
   showOfflineCountInTitle: true,
+  showCfUsage: true,
+  cfUsageRefreshMode: "open",
+  cfUsageRefreshMinutes: DEFAULT_CF_USAGE_REFRESH_MINUTES,
+  showAgentUpdateHint: true,
   homeGroupOrder: [],
   homeRegionOrder: [],
   homeDefaultGroup: "",
@@ -373,6 +390,10 @@ export function normalizeThemeSettings(
     showIpStackFilter: enabledUnlessFalse(settings?.showIpStackFilter),
     showIpStackStats: enabledUnlessFalse(settings?.showIpStackStats),
     showOfflineCountInTitle: enabledUnlessFalse(settings?.showOfflineCountInTitle),
+    showCfUsage: enabledUnlessFalse(settings?.showCfUsage),
+    cfUsageRefreshMode: normalizeCfUsageRefreshMode(settings?.cfUsageRefreshMode),
+    cfUsageRefreshMinutes: normalizeCfUsageRefreshMinutes(settings?.cfUsageRefreshMinutes),
+    showAgentUpdateHint: enabledUnlessFalse(settings?.showAgentUpdateHint),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     homeRegionOrder: normalizeHomeRegionOrder(settings?.homeRegionOrder),
     homeDefaultGroup: normalizeHomeDefaultGroup(settings?.homeDefaultGroup),

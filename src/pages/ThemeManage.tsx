@@ -30,6 +30,7 @@ import {
   CloudOff,
   BellRing,
   EyeOff,
+  Gauge,
   Grid3x3,
   LayoutTemplate,
   LayoutGrid,
@@ -65,6 +66,7 @@ import {
   type SiteThemeSyncPhase,
 } from "@/hooks/useSiteThemeOptions";
 import { useLocalThemeSettings } from "@/hooks/useThemeSettings";
+import { useAuth } from "@/hooks/useAuth";
 import { getNodes } from "@/services/api";
 import { getCachedFullNodeList } from "@/services/wsStore";
 import { carrierPingTasks } from "@/services/cfsm/mappers";
@@ -90,6 +92,7 @@ import {
   type CostPremiumEntry,
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
+import { CF_USAGE_REFRESH_MINUTES, CF_USAGE_REFRESH_MODES, type CfUsageRefreshMode } from "@/utils/cfUsage";
 import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
 import {
   dedupeGroupLabels,
@@ -331,6 +334,10 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showIpStackFilter: settings.showIpStackFilter,
     showIpStackStats: settings.showIpStackStats,
     showOfflineCountInTitle: settings.showOfflineCountInTitle,
+    showCfUsage: settings.showCfUsage,
+    cfUsageRefreshMode: settings.cfUsageRefreshMode,
+    cfUsageRefreshMinutes: settings.cfUsageRefreshMinutes,
+    showAgentUpdateHint: settings.showAgentUpdateHint,
     homeGroupOrder: settings.homeGroupOrder,
     homeRegionOrder: settings.homeRegionOrder,
     homeDefaultGroup: settings.homeDefaultGroup,
@@ -514,6 +521,18 @@ function SettingSelect({
       <ChevronDown size={14} className="setting-select-icon" aria-hidden />
     </div>
   );
+}
+
+function cfUsageRefreshModeLabel(mode: CfUsageRefreshMode): string {
+  if (mode === "manual") return t("settings.cfUsageRefreshManual");
+  if (mode === "interval") return t("settings.cfUsageRefreshInterval");
+  return t("settings.cfUsageRefreshOpen");
+}
+
+function cfUsageRefreshModeHint(mode: CfUsageRefreshMode): string {
+  if (mode === "manual") return t("settings.cfUsageRefreshManualHint");
+  if (mode === "interval") return t("settings.cfUsageRefreshIntervalHint");
+  return t("settings.cfUsageRefreshOpenHint");
 }
 
 const EMPTY_ASSIGNED_CLIENTS: string[] = [];
@@ -978,6 +997,8 @@ export function ThemeManage() {
   // 登录站长：改动自动保存并同步到后端，没有保存按钮（口径见 useCanSyncSiteTheme）。
   const canSaveToSite = useCanSyncSiteTheme();
   const siteSync = useSiteThemeSyncStatus();
+  // 「站长专属」那组只对登录站长有用（用量、Agent 版本访客都拿不到），访客不显示。
+  const isOwner = useAuth().data?.logged_in === true;
   const editVersionRef = useRef(0);
 
   // 单字段更新收口,所有表单控件都走它。值未变时原样返回 prev,保留旧的独立 useState
@@ -2184,6 +2205,82 @@ export function ThemeManage() {
                   </span>
                 </label>
               </InstancePanel>
+
+              {isOwner ? (
+              <InstancePanel
+                id="set-owner-info"
+                kicker={t("settings.kickerOwner")}
+                title={t("settings.ownerInfoTitle")}
+                aside={<Gauge size={16} />}
+              >
+                <p className="setting-hint mb-3">{t("settings.ownerInfoHint")}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <ToggleRow
+                    field="showCfUsage"
+                    title={t("settings.showCfUsage")}
+                    desc={t("settings.showCfUsageDesc")}
+                    checked={draft.showCfUsage}
+                    onPatch={patch}
+                  />
+                  <ToggleRow
+                    field="showAgentUpdateHint"
+                    title={t("settings.showAgentUpdateHint")}
+                    desc={t("settings.showAgentUpdateHintDesc")}
+                    checked={draft.showAgentUpdateHint}
+                    onPatch={patch}
+                  />
+                </div>
+                {/* 关掉用量面板时刷新方式没意义，整组收起来，免得看着还能设。 */}
+                {draft.showCfUsage ? (
+                  <div className="setting-grid mt-4">
+                    <div className="is-wide setting-segment-slot">
+                      <div className="setting-subhead">
+                        <span className="setting-subhead-title">{t("settings.cfUsageRefreshMode")}</span>
+                      </div>
+                      <div
+                        className="instance-segmented is-prominent is-even"
+                        role="group"
+                        aria-label={t("settings.cfUsageRefreshMode")}
+                      >
+                        {CF_USAGE_REFRESH_MODES.map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            data-active={draft.cfUsageRefreshMode === mode ? "true" : "false"}
+                            aria-pressed={draft.cfUsageRefreshMode === mode}
+                            onClick={() => patch("cfUsageRefreshMode", mode)}
+                          >
+                            {cfUsageRefreshModeLabel(mode)}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="setting-hint mt-2 block">
+                        {cfUsageRefreshModeHint(draft.cfUsageRefreshMode)}
+                      </span>
+                    </div>
+                    {draft.cfUsageRefreshMode === "interval" ? (
+                      <label className="min-w-0">
+                        <span className="setting-subhead">
+                          <span className="setting-subhead-title">{t("settings.cfUsageRefreshMinutes")}</span>
+                        </span>
+                        <SettingSelect
+                          value={String(draft.cfUsageRefreshMinutes)}
+                          onChange={(event) => patch("cfUsageRefreshMinutes", Number(event.target.value))}
+                          aria-label={t("settings.cfUsageRefreshMinutes")}
+                          className="w-full"
+                        >
+                          {CF_USAGE_REFRESH_MINUTES.map((minutes) => (
+                            <option key={minutes} value={minutes}>
+                              {t("settings.cfUsageEveryMinutes", { n: minutes })}
+                            </option>
+                          ))}
+                        </SettingSelect>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+              </InstancePanel>
+              ) : null}
             </>
           )}
 

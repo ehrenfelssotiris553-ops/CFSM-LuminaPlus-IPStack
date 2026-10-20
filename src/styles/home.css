@@ -1133,3 +1133,197 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- 站长专属：Agent 更新提示、CF 用量（只有登录站长看得到） ---- */
+
+.home-admin-notice {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 12px;
+  border: 1px solid color-mix(in srgb, var(--status-warning) 28%, var(--hairline));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--status-warning) 7%, var(--surface-a));
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.home-admin-notice-icon {
+  flex: 0 0 auto;
+  color: var(--status-warning);
+}
+
+.home-admin-notice-text {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.home-admin-notice-names {
+  min-width: 0;
+  flex: 1 1 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-admin-notice-link,
+.cf-usage-link {
+  flex: 0 0 auto;
+  color: var(--accent-500);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.home-admin-notice-link:hover,
+.cf-usage-link:hover {
+  text-decoration: underline;
+}
+
+.cf-usage {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface-a);
+  padding: 12px 16px;
+}
+
+.cf-usage-head {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+/* 窄屏时 .instance-segmented 会被拉成整行宽（详情页图表控件要这样），这里两个小按钮保持自身宽度。 */
+.cf-usage-day.instance-segmented {
+  width: auto;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.cf-usage-day.instance-segmented button {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.cf-usage-updated {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.cf-usage-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.cf-usage-refresh[data-spinning="true"] svg {
+  animation: instance-info-refresh-spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-usage-refresh[data-spinning="true"] svg {
+    animation: none;
+  }
+}
+
+.cf-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+@media (max-width: 860px) {
+  .cf-usage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cf-usage-meter {
+  --meter-color: var(--status-success);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cf-usage-meter[data-level="warn"] { --meter-color: var(--status-warning); }
+.cf-usage-meter[data-level="danger"] { --meter-color: var(--status-error); }
+
+.cf-usage-meter-top {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cf-usage-meter-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-usage-meter-pct {
+  flex: 0 0 auto;
+  color: var(--meter-color);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-usage-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-tertiary) 16%, transparent);
+}
+
+.cf-usage-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--meter-color);
+  transition: width 240ms ease;
+}
+
+.cf-usage-meter-value {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-usage-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.cf-usage-message[data-tone="warn"] { color: var(--status-warning); }
+.cf-usage-message[data-tone="error"] { color: var(--status-error); }
+
+.cf-usage-note {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}

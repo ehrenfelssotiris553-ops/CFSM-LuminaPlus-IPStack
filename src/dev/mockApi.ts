@@ -271,7 +271,8 @@ function buildServerPayload(server: MockServer, index: number) {
     ip_v4: "1",
     ip_v6: index % 2 === 0 ? "1" : "0",
     boot_time: String(now - (index + 1) * 86_400_000 * 9),
-    agent_version: "1.3.3",
+    // 每三台有一台是旧版 Agent，验「N 台 Agent 可更新」（登录后最新版本见 /api/config）。
+    agent_version: index % 3 === 1 ? "1.0.18" : "1.0.20",
     last_updated: offline ? now - 40 * 60_000 : now,
     timestamp: offline ? now - 40 * 60_000 : now,
     ...buildLatencyWindow(index, offline),
@@ -406,13 +407,46 @@ export function installDevMockApi() {
       return json({ success: true, theme_options: mockThemeOptions, message: "updateSuccess" });
     }
 
+    // 后台「查询 CF 用量」。地址里加 `&cfusage=missing` 模拟没配 Token，`&cfusage=error` 模拟 Cloudflare 报错。
+    if (url.pathname === "/admin/api" && init?.method?.toUpperCase() === "POST") {
+      const body = JSON.parse(String(init.body ?? "{}")) as { action?: string };
+      log.push(`POST /admin/api ${body.action ?? ""}`);
+      if (!requestHeaders.get("Authorization")) {
+        return new Response(JSON.stringify({ error: "Unauthorized", code: 401 }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const scenario = new URLSearchParams(window.location.search).get("cfusage");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (body.action !== "d1_usage" || scenario === "missing" || scenario === "error") {
+        const error = scenario === "missing" ? "cloudflareTokenRequired" : "Authentication error";
+        return new Response(JSON.stringify({ error, code: 400 }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const day = (scale: number) => ({
+        rowsRead: Math.round(1_234_567 * scale),
+        rowsWritten: Math.round(8_200 * scale),
+        workersRequests: Math.round(73_500 * scale),
+        durableObjectsRequests: Math.round(93_800 * scale),
+        durableObjectsHttpRequests: Math.round(1_200 * scale),
+        durableObjectsHibernationWakeups: Math.round(600 * scale),
+        durableObjectsInboundWebSocketMessages: Math.round(1_840_000 * scale),
+        durableObjectsRequestsEstimated: true,
+        durableObjectsRequestBillingRatio: 20,
+      });
+      return json({ success: true, usage: { today: day(1), yesterday: day(1.6) }, message: "d1UsageQueried" });
+    }
+
     if (url.pathname === "/api/config") {
       // 本地验「登录站长才看得到的东西」（版本更新提醒等）：localStorage 里放任意 jwt_token 就当已登录。
       // 真后端也是这样：最新版本号只对登录请求下发。
       const loggedIn = Boolean(window.localStorage.getItem("jwt_token"));
       return json({
         version: "2.8.5 Beta5",
-        ...(loggedIn ? { last_workers_version: "2.8.6", last_agent_version: "1.0.3" } : {}),
+        ...(loggedIn ? { last_workers_version: "2.8.6", last_agent_version: "1.0.20" } : {}),
         is_public: true,
         authorization: loggedIn,
         preferred_theme: "auto",

@@ -57,6 +57,8 @@ import {
   type IpStackCategory,
 } from "@/utils/ipStack";
 import { RenewalReminder } from "./RenewalReminder";
+import { AgentUpdateNotice } from "./AgentUpdateNotice";
+import { CfUsagePanel } from "./CfUsagePanel";
 import type { NodeViewMode } from "@/utils/themeSettings";
 import type { RenewalReminderSource } from "@/utils/renewalReminder";
 
@@ -806,6 +808,9 @@ export function NodeGrid() {
           assetRatingLabels={themeSettings.assetRatingLabels}
         />
       )}
+      {/* 下面两块只有登录站长看得到，各自判断登录态和开关，访客这里什么都不渲染、也不发请求。 */}
+      <AgentUpdateNotice />
+      <CfUsagePanel />
     </>
   );
 
