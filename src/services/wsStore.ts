@@ -7,6 +7,7 @@ import type {
   TrafficTrendSample,
 } from "@/types/cfsm";
 import { getServerSnapshot, getServersSnapshot, type ServersSnapshot } from "@/services/api";
+import { getJwtToken } from "@/services/cfsm/config";
 import {
   emptyNodeMetrics,
   isServerOnline,
@@ -902,6 +903,7 @@ async function performServersSync(focusUuid: string | null, mergeFocused = false
     if (focusUuid == null) retainPingNodes(order);
     focusOnlyHydrated = focusUuid != null;
     fullNodeListCached = focusUuid == null;
+    fullNodeListToken = getJwtToken();
 
     const sysConfigChanged = updateSysConfigSnapshot(snapshot.sysConfig);
     const storeStatusChanged =
@@ -1314,6 +1316,8 @@ let focusOnlyHydrated = false;
  * store 停掉（离开首页）时节点表留在内存里，这个标记也跟着留着，供设置页复用，见 {@link getCachedFullNodeList}。
  */
 let fullNodeListCached = false;
+/** 取那份全站列表时的登录令牌：登录 / 退出后列表范围会变（站长看得到隐藏节点、访客看不到），不能再复用。 */
+let fullNodeListToken = "";
 
 /** 最近一次快照给出的「节点 → 所属后端」：切换详情页焦点时照它重排订阅，不必等下一次同步。 */
 let latestBaseByServerId = new Map<string, string>();
@@ -1858,9 +1862,11 @@ export function getNodeTrafficTrendSnapshot(uuid: string): {
  * 首页这次打开页面已经取过的全站节点表；没取过（直接打开设置页 / 详情页）返回 null。
  *
  * 设置页只要节点名字和分组，有这份就不必再查一次 `/api/servers`（后端主题规范：列表只在首页首次进入查一次）。
+ * 这期间登录状态变过（比如在别的标签页登录了）就不复用：那份列表里没有只有站长看得到的隐藏节点。
  */
 export function getCachedFullNodeList(): NodeInfo[] | null {
   if (!fullNodeListCached || state.order.length === 0) return null;
+  if (fullNodeListToken !== getJwtToken()) return null;
   return getAllNodeMetaSnapshot();
 }
 

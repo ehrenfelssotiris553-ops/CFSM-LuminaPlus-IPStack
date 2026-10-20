@@ -590,6 +590,20 @@ describe("设置页复用首页的节点表", () => {
     expect(syncCount()).toBe(1);
   });
 
+  it("does not hand out a list fetched under a different login state", async () => {
+    mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a", "node-b"]));
+    const store = await loadStore();
+    const release = store.retainStore();
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getCachedFullNodeList()).not.toBeNull();
+
+    // 在别的标签页登录了：访客看到的那份列表里没有隐藏节点，设置页得自己重查。
+    window.localStorage.setItem("jwt_token", "admin-token");
+    expect(store.getCachedFullNodeList()).toBeNull();
+  });
+
   it("has no list to share when only the detail page's single server was loaded", async () => {
     const store = await loadStore();
     const release = store.retainStore();
