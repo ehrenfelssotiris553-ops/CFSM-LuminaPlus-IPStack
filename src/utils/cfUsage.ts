@@ -114,14 +114,14 @@ export function cfUsageResetTime(locale: string, now = new Date()): string {
   );
 }
 
-export type CfUsageErrorKind = "notConfigured" | "unavailable" | "failed";
+export type CfUsageErrorKind = "notConfigured" | "loginExpired" | "unavailable" | "failed";
 
 /**
  * 出错原因分三类给面板显示：
  * - notConfigured：后台没填 CF Token 或 Account ID；
+ * - loginExpired：登录过期（401）。有令牌时请求层会清掉它、首页随即按访客显示；只剩 Cookie 的登录没东西可清，在这里提示；
  * - unavailable：后台接口没了或返回格式变了（探针升级改了接口）；
  * - failed：其它，比如 Token 没有统计权限、网络超时，带上原始信息。
- * 登录过期（401）由请求层清掉令牌，首页随即按访客显示，面板自己消失，不用单独处理。
  */
 export function classifyCfUsageError(error: unknown): { kind: CfUsageErrorKind; detail: string } {
   const detail = error instanceof Error ? error.message : String(error ?? "");
@@ -129,6 +129,7 @@ export function classifyCfUsageError(error: unknown): { kind: CfUsageErrorKind; 
     if (detail === "cloudflareTokenRequired" || detail === "cloudflareAccountIdRequired") {
       return { kind: "notConfigured", detail };
     }
+    if (error.status === 401) return { kind: "loginExpired", detail };
     if (error.status === 404 || error.status === 405) return { kind: "unavailable", detail };
     return { kind: "failed", detail };
   }

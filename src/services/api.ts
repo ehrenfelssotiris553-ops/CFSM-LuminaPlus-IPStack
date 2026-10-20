@@ -222,12 +222,15 @@ const LOGGED_IN: Me = { logged_in: true, username: "admin", uuid: "" };
 
 /**
  * 从已经拿到的站点配置推导登录态，**不另发请求**（后端主题规范：`/api/config` 全程只查一次）。
- * 原来 `["me"]` 自己再查一遍 config，每次窗口获得焦点还重查。没令牌直接算未登录；有令牌但 config 还没到，返回 undefined。
+ * config 到了就以后端的 `authorization` 为准；还没到时，没令牌先按访客显示，有令牌返回 undefined 等结果。
+ *
+ * 登录时后端同时写了 localStorage 的令牌和 `cfsm_auth` Cookie，请求都带 Cookie（`credentials: "include"`）。
+ * 原版没令牌就一律算访客；可手机浏览器常把 localStorage 清掉而 Cookie 还在（iPhone Safari 会清理一阵没访问的
+ * 网站的本地数据），后端明明认这个登录，主题却把站长当访客，站长专属的东西（CF 用量等）就看不到了。
  */
 export function resolveMe(config: Pick<PublicConfig, "authorization"> | undefined): Me | undefined {
-  if (!getJwtToken()) return LOGGED_OUT;
-  if (!config) return undefined;
-  return config.authorization ? LOGGED_IN : LOGGED_OUT;
+  if (config) return config.authorization ? LOGGED_IN : LOGGED_OUT;
+  return getJwtToken() ? undefined : LOGGED_OUT;
 }
 
 /* ------------------------------------------------------------------ *

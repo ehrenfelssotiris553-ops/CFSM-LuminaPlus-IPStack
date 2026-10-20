@@ -178,12 +178,12 @@ function readSyncPending(): boolean {
 }
 
 /**
- * 这台设备的改动要不要自动同步到后端：有令牌，且站点配置（`authorization`）没判成未登录。
- * 光看令牌不够：令牌过期的老访客每改一次颜色都会撞一次 401。
+ * 这台设备的改动要不要自动同步到后端：站点配置（`authorization`）判成已登录；有令牌时 config 还没到也先算可以。
+ * 光看令牌不够：令牌过期的老访客每改一次颜色都会撞一次 401。没令牌但后端认 Cookie 的站长也能同步（见 resolveMe）。
  */
 export function canSyncSiteTheme(): boolean {
-  if (!getJwtToken()) return false;
-  return resolveMe(queryClient.getQueryData<PublicConfig>(["public"]))?.logged_in !== false;
+  const me = resolveMe(queryClient.getQueryData<PublicConfig>(["public"]));
+  return getJwtToken() ? me?.logged_in !== false : me?.logged_in === true;
 }
 
 /** 设置页、取色器判断「登录站长」用，与自动同步同口径；随登录校验结果更新。 */
@@ -445,7 +445,7 @@ export async function restoreSiteThemeBackup(): Promise<boolean> {
 export function startSiteThemeAutoSync(): () => void {
   const stopThemeEdits = subscribeLocalThemeSettingsEdits(handleLocalEdit);
   const stopLineEdits = subscribePingLineOverrideEdits(handleLocalEdit);
-  if (readSyncPending() && getJwtToken()) {
+  if (readSyncPending() && canSyncSiteTheme()) {
     try {
       const raw = JSON.parse(window.localStorage.getItem(SYNC_BASE_KEY) || "null");
       if (raw && typeof raw === "object" && !Array.isArray(raw)) syncBase = raw;
@@ -484,7 +484,7 @@ export function hasUnsyncedLocalChanges({
 /** 失败后手动重试（登录态失效重新登录回来、完成人机验证之后）。 */
 export function retrySiteThemeSync(): void {
   if (syncStatus.phase === "conflict") return;
-  if (!getJwtToken()) return;
+  if (!canSyncSiteTheme()) return;
   editSeq += 1;
   scheduleSync(0);
 }

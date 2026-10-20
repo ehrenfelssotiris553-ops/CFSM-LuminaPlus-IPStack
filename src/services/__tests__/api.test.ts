@@ -262,7 +262,11 @@ describe("getPublic", () => {
 describe("resolveMe", () => {
   it("reports a logged-out visitor without waiting for the config", () => {
     expect(resolveMe(undefined)).toMatchObject({ logged_in: false });
-    expect(resolveMe({ authorization: true })).toMatchObject({ logged_in: false });
+    expect(resolveMe({ authorization: false })).toMatchObject({ logged_in: false });
+  });
+
+  it("trusts the backend when only the login cookie is left (phone browsers clear localStorage)", () => {
+    expect(resolveMe({ authorization: true })).toMatchObject({ logged_in: true });
   });
 
   it("derives the login state from config.authorization, without a request of its own", () => {

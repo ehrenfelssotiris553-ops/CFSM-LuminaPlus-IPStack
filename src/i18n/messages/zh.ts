@@ -668,6 +668,7 @@ export const zh = {
   "cfUsage.durableObjectsDurationTip": "和 WSS 连接开着多久有关，24 小时开着固定占 85% 左右，不受服务器台数影响。",
   "cfUsage.durableObjectsBreakdown": "估算方法：HTTP 请求 {http} + 休眠唤醒 {wakeups} + 收到的 WebSocket 消息 {messages} 条（每 {ratio} 条算 1 次）",
   "cfUsage.notConfigured": "后台还没填 Cloudflare Token 或 Account ID。",
+  "cfUsage.loginExpired": "登录已过期，请重新登录后台。",
   "cfUsage.openAdmin": "去后台设置",
   "cfUsage.unavailable": "后台的用量接口有变化，暂时查不了（可能是探针升级了）。",
   "cfUsage.failed": "查询失败：{detail}",

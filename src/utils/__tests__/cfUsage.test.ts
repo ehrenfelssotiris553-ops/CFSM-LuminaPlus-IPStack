@@ -124,6 +124,7 @@ describe("classifyCfUsageError", () => {
     expect(
       classifyCfUsageError(new ApiRequestError("cloudflareAccountIdRequired", 400, "/admin/api")).kind,
     ).toBe("notConfigured");
+    expect(classifyCfUsageError(new ApiRequestError("Unauthorized", 401, "/admin/api")).kind).toBe("loginExpired");
     expect(classifyCfUsageError(new ApiRequestError("Not Found", 404, "/admin/api")).kind).toBe("unavailable");
     expect(classifyCfUsageError(new Error("Schema mismatch on /admin/api: Required")).kind).toBe("unavailable");
     expect(classifyCfUsageError(new ApiRequestError("Authentication error", 400, "/admin/api"))).toEqual({

@@ -666,6 +666,7 @@ export const es: Messages = {
   "cfUsage.durableObjectsDurationTip": "Depende de cuánto tiempo están abiertas las conexiones WSS: mantener una abierta todo el día usa cerca del 85 %, sin importar cuántos servidores tengas.",
   "cfUsage.durableObjectsBreakdown": "Estimación: {http} solicitudes HTTP + {wakeups} reactivaciones + {messages} mensajes WebSocket recibidos (cada {ratio} cuentan como 1)",
   "cfUsage.notConfigured": "Falta el token o el ID de cuenta de Cloudflare en el panel de administración.",
+  "cfUsage.loginExpired": "Tu sesión caducó. Vuelve a iniciar sesión en el panel.",
   "cfUsage.openAdmin": "Abrir administración",
   "cfUsage.unavailable": "La API de uso del panel cambió y no se puede consultar (quizá se actualizó el monitor).",
   "cfUsage.failed": "Error en la consulta: {detail}",

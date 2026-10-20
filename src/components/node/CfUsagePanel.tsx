@@ -58,10 +58,10 @@ function meterTitle(metric: CfUsageMetric, day: CfUsageDay | undefined): string 
 
 function UsageError({ error }: { error: unknown }) {
   const { kind, detail } = classifyCfUsageError(error);
-  if (kind === "notConfigured") {
+  if (kind === "notConfigured" || kind === "loginExpired") {
     return (
       <p className="cf-usage-message" data-tone="warn" role="status">
-        {t("cfUsage.notConfigured")}{" "}
+        {t(kind === "notConfigured" ? "cfUsage.notConfigured" : "cfUsage.loginExpired")}{" "}
         <a href={getAdminUrl()} className="cf-usage-link">
           {t("cfUsage.openAdmin")}
         </a>

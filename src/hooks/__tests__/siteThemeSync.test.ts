@@ -250,6 +250,7 @@ describe("登录站长的改动自动同步到后端", () => {
 
   it("未登录的访客只存本机，不发请求", async () => {
     window.localStorage.removeItem("jwt_token");
+    queryClient.setQueryData<PublicConfig>(["public"], { theme_settings: {}, authorization: false } as unknown as PublicConfig);
     stop = startSiteThemeAutoSync();
 
     saveLocalThemeSettings({ desktopNodeViewMode: "compact" });
@@ -257,6 +258,18 @@ describe("登录站长的改动自动同步到后端", () => {
 
     expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
     expect(getLocalThemeSettings()).toEqual({ desktopNodeViewMode: "compact" });
+  });
+
+  it("本机令牌被浏览器清掉、只剩登录 Cookie 的站长照样同步", async () => {
+    acceptWrites();
+    window.localStorage.removeItem("jwt_token");
+    // seedConfig 的 authorization: true 就是后端认了这个 Cookie。
+    stop = startSiteThemeAutoSync();
+
+    saveLocalThemeSettings({ desktopNodeViewMode: "compact" });
+    await flushDebounce();
+
+    expect(mocks.saveThemeOptions).toHaveBeenCalledTimes(1);
   });
 
   it("令牌还在但登录校验判成未登录（过期），也不发", async () => {

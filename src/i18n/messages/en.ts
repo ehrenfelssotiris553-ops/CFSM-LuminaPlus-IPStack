@@ -666,6 +666,7 @@ export const en: Messages = {
   "cfUsage.durableObjectsDurationTip": "Depends on how long WSS connections stay open: keeping one open all day uses about 85%, regardless of how many servers you have.",
   "cfUsage.durableObjectsBreakdown": "Estimate: {http} HTTP requests + {wakeups} hibernation wake-ups + {messages} incoming WebSocket messages (every {ratio} count as 1)",
   "cfUsage.notConfigured": "The Cloudflare token or account ID is not set in the admin panel.",
+  "cfUsage.loginExpired": "Your login has expired. Sign in to the admin panel again.",
   "cfUsage.openAdmin": "Open admin",
   "cfUsage.unavailable": "The admin usage API has changed and cannot be queried (the monitor may have been upgraded).",
   "cfUsage.failed": "Query failed: {detail}",
