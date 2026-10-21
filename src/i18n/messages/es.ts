@@ -707,8 +707,8 @@ export const es: Messages = {
   "cfUsage.short.workersRequests": "Workers",
   "cfUsage.short.durableObjectsRequests": "Solicitudes DO",
   "cfUsage.short.durableObjectsDuration": "Duración DO",
-  "ping.settingHidden": "{n} ocultas en ajustes · mostrar",
-  "ping.settingHiddenShown": "Ocultar las {n} marcadas como ocultas",
-  "ping.settingHiddenTitle": "Las líneas ocultas para este servidor en los ajustes no se dibujan. Pulsa para verlas ahora sin cambiar los ajustes.",
+  "ping.settingHidden": "{n} más no se muestran en la portada · mostrar",
+  "ping.settingHiddenShown": "Ocultar las {n} que no están en la portada",
+  "ping.settingHiddenTitle": "Las líneas que no se eligieron para la portada, o que están ocultas para este servidor, no se dibujan. Pulsa para verlas ahora sin cambiar los ajustes.",
   // @@entries
 };

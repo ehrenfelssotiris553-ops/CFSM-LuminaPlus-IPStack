@@ -707,8 +707,8 @@ export const en: Messages = {
   "cfUsage.short.workersRequests": "Workers",
   "cfUsage.short.durableObjectsRequests": "DO requests",
   "cfUsage.short.durableObjectsDuration": "DO duration",
-  "ping.settingHidden": "{n} hidden in settings · show",
-  "ping.settingHiddenShown": "Hide the {n} set as hidden",
-  "ping.settingHiddenTitle": "Lines hidden for this server in settings are left out by default. Click to show them for now without changing settings.",
+  "ping.settingHidden": "{n} more not shown on the homepage · show",
+  "ping.settingHiddenShown": "Hide the {n} not shown on the homepage",
+  "ping.settingHiddenTitle": "Lines not picked for the homepage, or hidden for this server in settings, are left out by default. Click to show them for now without changing settings.",
   // @@entries
 };
