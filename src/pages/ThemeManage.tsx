@@ -1,3 +1,4 @@
+import "@/styles/settings-page.css";
 import { IpStackEditor } from "@/components/theme/IpStackEditor";
 import { OfflineNotifyToggle } from "@/components/theme/OfflineNotifyToggle";
 import { PingDisplayEditor } from "@/components/theme/PingDisplayEditor";
@@ -97,10 +98,14 @@ import { formatVersionLabel } from "@/utils/versionCompare";
 import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
 import {
   dedupeGroupLabels,
+  getHomeRegionOptions,
+  HOME_ALL_REGION,
+  mergeHomeRegionOrder,
   normalizeHomeGroupOrder,
   normalizeHomeRegionOrder,
   sortHomeGroupOptions,
 } from "@/utils/homeNodes";
+import { RegionTabs } from "@/components/node/RegionTabs";
 import {
   HOMEPAGE_MULTI_PING_MAX_COUNT,
   HOMEPAGE_MULTI_PING_MIN_COUNT,
@@ -1203,6 +1208,11 @@ export function ThemeManage() {
     Math.max(sortedTasks.length, HOMEPAGE_MULTI_PING_MIN_COUNT),
   );
   const sortedClients = useMemo(() => sortClients(adminClients ?? []), [adminClients]);
+  // 地区顺序在设置页拖：地区和数量用设置页本来就拉的节点列表算，不为它去连实时数据。
+  const regionChoices = useMemo(
+    () => getHomeRegionOptions(sortedClients, draft.homeRegionOrder),
+    [sortedClients, draft.homeRegionOrder],
+  );
   const clientsById = useMemo(
     () => new Map(sortedClients.map((client) => [client.uuid, client])),
     [sortedClients],
@@ -2098,7 +2108,7 @@ export function ThemeManage() {
                   )}
                 </div>
 
-                {/* 地区顺序在首页地区栏上直接拖（站长提的：拖比在这里上下点直观）；这里只留查看和恢复默认。 */}
+                {/* 首页的地区收进了筛选下拉，顺序在这里拖（站长提的：拖比上下点直观）。 */}
                 <div className="mt-4">
                   <div className="setting-subhead">
                     <span className="setting-subhead-title">{t("settings.regionOrder")}</span>
@@ -2106,23 +2116,33 @@ export function ThemeManage() {
                       {t("settings.regionOrderHint")}
                     </span>
                   </div>
-                  <div className="surface-inset mt-2 flex items-center justify-between gap-3 px-4 py-2.5">
-                    <span
-                      className="truncate text-[13px] text-[var(--text-primary)]"
-                      title={draft.homeRegionOrder.join(" → ")}
-                    >
-                      {draft.homeRegionOrder.length > 0
-                        ? draft.homeRegionOrder.join(" → ")
-                        : t("settings.regionOrderDefault")}
+                  <div className="mt-2 flex flex-col gap-2">
+                    {regionChoices.length > 1 ? (
+                      <RegionTabs
+                        regions={regionChoices}
+                        selectedRegion={HOME_ALL_REGION}
+                        onSelectRegion={() => undefined}
+                        onReorder={(visibleAfter) =>
+                          patch(
+                            "homeRegionOrder",
+                            mergeHomeRegionOrder(draft.homeRegionOrder, regionChoices.map((option) => option.code), visibleAfter),
+                          )
+                        }
+                      />
+                    ) : null}
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="setting-hint">
+                        {draft.homeRegionOrder.length > 0 ? t("settings.regionOrderCustom") : t("settings.regionOrderDefault")}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={draft.homeRegionOrder.length === 0}
+                        onClick={() => patch("homeRegionOrder", [])}
+                        className="theme-manage-button is-compact shrink-0"
+                      >
+                        {t("switcher.reset")}
+                      </button>
                     </span>
-                    <button
-                      type="button"
-                      disabled={draft.homeRegionOrder.length === 0}
-                      onClick={() => patch("homeRegionOrder", [])}
-                      className="theme-manage-button is-compact shrink-0"
-                    >
-                      {t("switcher.reset")}
-                    </button>
                   </div>
                 </div>
 
