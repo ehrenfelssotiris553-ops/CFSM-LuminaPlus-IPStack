@@ -93,6 +93,7 @@ import {
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
 import { CF_USAGE_REFRESH_MINUTES, CF_USAGE_REFRESH_MODES, type CfUsageRefreshMode } from "@/utils/cfUsage";
+import { formatVersionLabel } from "@/utils/versionCompare";
 import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
 import {
   dedupeGroupLabels,
@@ -338,6 +339,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     cfUsageRefreshMode: settings.cfUsageRefreshMode,
     cfUsageRefreshMinutes: settings.cfUsageRefreshMinutes,
     showAgentUpdateHint: settings.showAgentUpdateHint,
+    agentUpdateIgnoredVersion: settings.agentUpdateIgnoredVersion,
     homeGroupOrder: settings.homeGroupOrder,
     homeRegionOrder: settings.homeRegionOrder,
     homeDefaultGroup: settings.homeDefaultGroup,
@@ -2230,6 +2232,21 @@ export function ThemeManage() {
                     onPatch={patch}
                   />
                 </div>
+                {/* 首页点过「忽略此版本」时在这里能撤回，不然只能等下一版才再看到提醒。 */}
+                {draft.agentUpdateIgnoredVersion ? (
+                  <div className="surface-inset mt-3 flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="setting-hint">
+                      {t("settings.agentUpdateIgnored", { version: formatVersionLabel(draft.agentUpdateIgnoredVersion) })}
+                    </span>
+                    <button
+                      type="button"
+                      className="control-button shrink-0 px-3 py-2 text-[12px]"
+                      onClick={() => patch("agentUpdateIgnoredVersion", "")}
+                    >
+                      {t("settings.agentUpdateRestore")}
+                    </button>
+                  </div>
+                ) : null}
                 {/* 关掉用量面板时刷新方式没意义，整组收起来，免得看着还能设。 */}
                 {draft.showCfUsage ? (
                   <div className="setting-grid mt-4">

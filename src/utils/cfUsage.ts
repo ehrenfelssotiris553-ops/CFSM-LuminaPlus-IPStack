@@ -97,6 +97,11 @@ export function cfUsageMeters(day: CfUsageDay): CfUsageMeter[] {
   });
 }
 
+/** 收起时摘要里放哪几项：用得最多的排前面。 */
+export function topCfUsageMeters(meters: readonly CfUsageMeter[], count = 2): CfUsageMeter[] {
+  return [...meters].sort((a, b) => b.ratio - a.ratio).slice(0, count);
+}
+
 /** 百分比文字：不到 10% 留一位小数，有用量但不到 0.1% 写「<0.1%」，免得看着像没用。 */
 export function formatCfUsagePercent(ratio: number): string {
   const pct = ratio * 100;

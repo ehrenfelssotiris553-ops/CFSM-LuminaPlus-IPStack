@@ -1170,6 +1170,22 @@
   white-space: nowrap;
 }
 
+.home-admin-notice-ignore {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.home-admin-notice-ignore:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
 .home-admin-notice-link,
 .cf-usage-link {
   flex: 0 0 auto;
@@ -1201,6 +1217,82 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
+}
+
+/* 默认收起：只剩标题行，上下留白也收一点，手机上首页别被它占掉。 */
+.cf-usage[data-expanded="false"] {
+  padding-block: 8px;
+}
+
+.cf-usage-toggle {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cf-usage[data-expanded="true"] .cf-usage-toggle {
+  flex: 0 1 auto;
+}
+
+.cf-usage-chips {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.cf-usage-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cf-usage-chip-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--status-success);
+}
+
+.cf-usage-chip[data-level="warn"] .cf-usage-chip-dot { background: var(--status-warning); }
+.cf-usage-chip[data-level="danger"] .cf-usage-chip-dot { background: var(--status-error); }
+
+.cf-usage-chevron {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  transition: transform 160ms ease;
+}
+
+.cf-usage[data-expanded="true"] .cf-usage-chevron {
+  transform: rotate(180deg);
+}
+
+/* 很窄的手机只放用得最多的那一项。 */
+@media (max-width: 380px) {
+  .cf-usage-chip + .cf-usage-chip {
+    display: none;
+  }
 }
 
 /* 窄屏时 .instance-segmented 会被拉成整行宽（详情页图表控件要这样），这里两个小按钮保持自身宽度。 */

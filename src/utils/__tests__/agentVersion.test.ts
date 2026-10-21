@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOutdatedAgents } from "@/utils/agentVersion";
+import { agentUpdateTarget, findOutdatedAgents } from "@/utils/agentVersion";
 
 const node = (uuid: string, agent_version: string) => ({ uuid, name: uuid.toUpperCase(), agent_version });
 
@@ -19,5 +19,17 @@ describe("findOutdatedAgents", () => {
 
   it("reports nothing without a latest version (visitors, old backends)", () => {
     expect(findOutdatedAgents([node("a", "1.0.1")], "")).toEqual([]);
+  });
+});
+
+describe("agentUpdateTarget", () => {
+  it("stays quiet for an ignored version and speaks up again for a newer one", () => {
+    expect(agentUpdateTarget("1.0.20", "", true)).toBe("1.0.20");
+    expect(agentUpdateTarget("1.0.20", "1.0.20", true)).toBe("");
+    expect(agentUpdateTarget("1.0.20", "v1.0.20", true)).toBe("");
+    expect(agentUpdateTarget("1.0.21", "1.0.20", true)).toBe("1.0.21");
+    // 关掉提醒，或者没有最新版本号（访客、老后端），一律不提醒。
+    expect(agentUpdateTarget("1.0.21", "", false)).toBe("");
+    expect(agentUpdateTarget("", "", true)).toBe("");
   });
 });

@@ -551,6 +551,8 @@ export interface ThemeSettings {
   cfUsageRefreshMinutes?: number;
   /** 登录站长在首页看到「N 台 Agent 可更新」。 */
   showAgentUpdateHint?: boolean;
+  /** 站长点「忽略此版本」时的最新 Agent 版本号：这一版（和更早的）不再提醒，出了更新的版本再提醒。 */
+  agentUpdateIgnoredVersion?: string;
   homeGroupOrder?: string[];
   /** 首页地区栏的顺序（地区代码），在首页直接拖动得到；没列进去的按默认规则排在后面。 */
   homeRegionOrder?: string[];

@@ -694,5 +694,18 @@ export const en: Messages = {
   "settings.cfUsageRefreshIntervalHint": "Queries at the interval while the homepage is open; pauses in the background and catches up on return if the interval has passed.",
   "settings.cfUsageRefreshMinutes": "Interval",
   "settings.cfUsageEveryMinutes": "Every {n} min",
+  "agentUpdate.ignore": "Ignore this version",
+  "agentUpdate.ignoreTitle": "Stop reminding about {version}; you'll be reminded again when a newer agent is released",
+  "settings.agentUpdateIgnored": "Reminders for {version} are ignored. You'll be reminded again when a newer version is released.",
+  "settings.agentUpdateRestore": "Remind me again",
+  "cfUsage.expand": "Show CF usage",
+  "cfUsage.collapse": "Hide CF usage",
+  "cfUsage.notQueried": "Not loaded",
+  "cfUsage.failedShort": "Query failed",
+  "cfUsage.short.rowsRead": "D1 reads",
+  "cfUsage.short.rowsWritten": "D1 writes",
+  "cfUsage.short.workersRequests": "Workers",
+  "cfUsage.short.durableObjectsRequests": "DO requests",
+  "cfUsage.short.durableObjectsDuration": "DO duration",
   // @@entries
 };

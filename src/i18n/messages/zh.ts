@@ -696,6 +696,19 @@ export const zh = {
   "settings.cfUsageRefreshIntervalHint": "首页开着时按间隔自动查；页面在后台时暂停，切回来如果已经超过间隔就补查一次。",
   "settings.cfUsageRefreshMinutes": "刷新间隔",
   "settings.cfUsageEveryMinutes": "每 {n} 分钟",
+  "agentUpdate.ignore": "忽略此版本",
+  "agentUpdate.ignoreTitle": "{version} 不再提醒，Agent 出了更新的版本会再提醒",
+  "settings.agentUpdateIgnored": "已忽略 {version} 的更新提醒，出了更新的版本会再提醒。",
+  "settings.agentUpdateRestore": "恢复提醒",
+  "cfUsage.expand": "展开 CF 用量",
+  "cfUsage.collapse": "收起 CF 用量",
+  "cfUsage.notQueried": "未查询",
+  "cfUsage.failedShort": "查询失败",
+  "cfUsage.short.rowsRead": "D1 读取",
+  "cfUsage.short.rowsWritten": "D1 写入",
+  "cfUsage.short.workersRequests": "Workers",
+  "cfUsage.short.durableObjectsRequests": "DO 请求",
+  "cfUsage.short.durableObjectsDuration": "DO 时长",
   // @@entries
 } as const;
 

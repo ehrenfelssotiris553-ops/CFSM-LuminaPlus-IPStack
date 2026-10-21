@@ -15,7 +15,7 @@
 | 浏览器通知 | 节点掉线 / 恢复时弹通知（可选，只存本机） |
 | 首页延迟 | 按协议、按节点、按单条线路控制首页显示哪些延迟线路，见 [THEME-OPTIMIZATION.md](THEME-OPTIMIZATION.md) |
 | 首页 CF 用量（站长） | 今天 / 昨天的 D1 读写、Workers、DO 请求，对比免费版每日额度 |
-| Agent 更新提醒（站长） | 首页提示哪几台 Agent 比最新版旧；详情页显示 Agent 版本并标出「可更新」 |
+| Agent 更新提醒（站长） | 首页提示哪几台 Agent 比最新版旧，可以「忽略此版本」；详情页显示 Agent 版本并标出「可更新」 |
 
 除 CF 用量外都不增加任何后端请求，只使用 `/api/config`、`/api/servers` 与实时推送里已有的数据。
 
@@ -56,13 +56,16 @@
 
 **主题设置 → 首页 → 站长专属信息**（只有登录后才显示这一组）
 
-- 「首页显示 CF 用量」：默认打开。卡片在总览下面，只有登录站长看得到。
+- 「首页显示 CF 用量」：默认打开。卡片在总览下面，只有登录站长看得到。默认收起成一行，只列今天用得最多的两项
+  （很窄的手机只列一项），点一下展开看全部；展开还是收起记在这台设备上。
 - 「用量刷新方式」：
   - **打开首页时**（默认）：每次打开或刷新（F5）首页查一次；从详情页返回、切回这个标签页都不重查。
   - **只手动**：打开首页不查，点卡片右上角的刷新按钮才查。
   - **定时**：每 5 / 10 / 30 / 60 分钟查一次；页面在后台时暂停，切回来如果已经超过间隔就补查一次。
   - 不管哪种，卡片上随时可以手动刷新。
 - 「Agent 更新提醒」：默认打开。最新版本号由后端 `/api/config` 只发给登录站长；节点没上报版本、或版本号认不出时不提示。
+  想晚点升级就点提醒条上的「忽略此版本」：这一版不再提醒，Agent 出了更新的版本会再提醒；这个选择同步到后端，
+  换台设备也一样。设置里会显示「已忽略 vX」，点「恢复提醒」撤回。
 
 关于 CF 用量：
 
@@ -109,13 +112,15 @@ https://github.com/ehrenfelssotiris553-ops/CFSM-LuminaPlus-IPStack/tree/dist
   "showCfUsage": true,
   "cfUsageRefreshMode": "open",
   "cfUsageRefreshMinutes": 10,
-  "showAgentUpdateHint": true
+  "showAgentUpdateHint": true,
+  "agentUpdateIgnoredVersion": ""
 }
 ```
 
 `homepageIpStackOverrides` 里省略某个协议表示自动；`true` 固定显示；`false` 固定隐藏。开关省略时默认打开。
 `cfUsageRefreshMode` 可填 `open`（打开首页时）、`manual`（只手动）、`interval`（定时）；
 `cfUsageRefreshMinutes` 只认 5、10、30、60，其他值按 10 处理。
+`agentUpdateIgnoredVersion` 是点「忽略此版本」时记下的版本号，空串表示没忽略。
 浏览器通知开关不在这里，存在浏览器本地的 `cfsm-luminaplus:offline-notify`。
 
 ## 回退

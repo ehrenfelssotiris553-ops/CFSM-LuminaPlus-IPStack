@@ -6,6 +6,7 @@ import {
   cfUsageMeters,
   cfUsageQueryTiming,
   cfUsageResetTime,
+  topCfUsageMeters,
   classifyCfUsageError,
   formatCfUsagePercent,
   normalizeCfUsageRefreshMinutes,
@@ -84,6 +85,14 @@ describe("cfUsageMeters", () => {
     expect(meters[0]).toMatchObject({ used: 1_000_000, limit: 5_000_000, ratio: 0.2 });
     // 超额时比例照实给（条子在界面上封顶 100%）。
     expect(meters[3]!.ratio).toBeCloseTo(1.2);
+  });
+
+  it("puts the most-used metrics first for the collapsed summary", () => {
+    const day = CfUsageDaySchema.parse({ rowsRead: 100_000, workersRequests: 74_000, durableObjectsRequests: 94_000 });
+    expect(topCfUsageMeters(cfUsageMeters(day)).map((meter) => meter.metric)).toEqual([
+      "durableObjectsRequests",
+      "workersRequests",
+    ]);
   });
 
   it("fills missing fields with zero", () => {

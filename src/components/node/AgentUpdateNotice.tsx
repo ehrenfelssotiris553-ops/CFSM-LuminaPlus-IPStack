@@ -6,7 +6,8 @@ import { useAllNodeMeta } from "@/hooks/useNode";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { getAdminUrl } from "@/services/cfsm/config";
-import { findOutdatedAgents } from "@/utils/agentVersion";
+import { getLocalThemeSettings, saveLocalThemeSettings } from "@/services/themeSettingsStore";
+import { agentUpdateTarget, findOutdatedAgents } from "@/utils/agentVersion";
 import { formatNodeNames } from "@/utils/offlineAlerts";
 import { formatVersionLabel } from "@/utils/versionCompare";
 
@@ -19,8 +20,12 @@ export function AgentUpdateNotice() {
   const { data: config } = usePublicConfig();
   const settings = useThemeSettings();
   const nodes = useAllNodeMeta();
-  const latest = config?.latestAgentVersion ?? "";
-  const enabled = me?.logged_in === true && settings.isReady && settings.showAgentUpdateHint;
+  const enabled = me?.logged_in === true && settings.isReady;
+  const latest = agentUpdateTarget(
+    config?.latestAgentVersion ?? "",
+    settings.agentUpdateIgnoredVersion,
+    settings.showAgentUpdateHint,
+  );
   const outdated = useMemo(
     () => (enabled ? findOutdatedAgents(nodes, latest) : []),
     [enabled, nodes, latest],
@@ -39,6 +44,15 @@ export function AgentUpdateNotice() {
       <span className="home-admin-notice-names" title={allNames}>
         {formatNodeNames(outdated)}
       </span>
+      {/* 存进主题设置：站长的改动会自动同步到后端，换台设备也不再提醒这一版。 */}
+      <button
+        type="button"
+        className="home-admin-notice-ignore"
+        title={t("agentUpdate.ignoreTitle", { version: formatVersionLabel(latest) })}
+        onClick={() => saveLocalThemeSettings({ ...getLocalThemeSettings(), agentUpdateIgnoredVersion: latest })}
+      >
+        {t("agentUpdate.ignore")}
+      </button>
       <a href={getAdminUrl()} className="home-admin-notice-link">
         {t("agentUpdate.openAdmin")}
       </a>

@@ -14,6 +14,7 @@ import { resolveIpStackVisibility } from "@/utils/ipStack";
 import { useAuth } from "@/hooks/useAuth";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { formatVersionLabel, isNewerVersion } from "@/utils/versionCompare";
+import { agentUpdateTarget } from "@/utils/agentVersion";
 
 // Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const timeFormatter = memoByLanguage(
@@ -35,7 +36,7 @@ export function InstanceDetails({
 }) {
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
-  const { showIpv4, showIpv6, homepageIpStackOverrides, showAgentUpdateHint } = useThemeSettings();
+  const { showIpv4, showIpv6, homepageIpStackOverrides, showAgentUpdateHint, agentUpdateIgnoredVersion } = useThemeSettings();
   const { data: me } = useAuth();
   const { data: config } = usePublicConfig();
   const isOwner = me?.logged_in === true;
@@ -111,7 +112,7 @@ export function InstanceDetails({
               value={
                 <AgentVersionValue
                   version={meta.agent_version}
-                  latest={showAgentUpdateHint ? (config?.latestAgentVersion ?? "") : ""}
+                  latest={agentUpdateTarget(config?.latestAgentVersion ?? "", agentUpdateIgnoredVersion, showAgentUpdateHint)}
                 />
               }
             />

@@ -150,6 +150,8 @@ export interface ResolvedThemeSettings {
   cfUsageRefreshMinutes: number;
   /** 首页「N 台 Agent 可更新」（只有登录站长看得到）。 */
   showAgentUpdateHint: boolean;
+  /** 已忽略的 Agent 版本（空 = 没忽略），见 agentUpdateTarget。 */
+  agentUpdateIgnoredVersion: string;
   homeGroupOrder: string[];
   /** 地区栏顺序：在首页拖动地区标签得到（见 mergeHomeRegionOrder）。空 = 按默认地理优先级。 */
   homeRegionOrder: string[];
@@ -217,6 +219,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   cfUsageRefreshMode: "open",
   cfUsageRefreshMinutes: DEFAULT_CF_USAGE_REFRESH_MINUTES,
   showAgentUpdateHint: true,
+  agentUpdateIgnoredVersion: "",
   homeGroupOrder: [],
   homeRegionOrder: [],
   homeDefaultGroup: "",
@@ -394,6 +397,7 @@ export function normalizeThemeSettings(
     cfUsageRefreshMode: normalizeCfUsageRefreshMode(settings?.cfUsageRefreshMode),
     cfUsageRefreshMinutes: normalizeCfUsageRefreshMinutes(settings?.cfUsageRefreshMinutes),
     showAgentUpdateHint: enabledUnlessFalse(settings?.showAgentUpdateHint),
+    agentUpdateIgnoredVersion: normalizePlainText(settings?.agentUpdateIgnoredVersion).trim().slice(0, 40),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
     homeRegionOrder: normalizeHomeRegionOrder(settings?.homeRegionOrder),
     homeDefaultGroup: normalizeHomeDefaultGroup(settings?.homeDefaultGroup),
