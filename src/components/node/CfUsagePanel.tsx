@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { getLocale, memoByLanguage, t, type MessageKey } from "@/i18n";
 import { useCfUsage } from "@/hooks/useCfUsage";
 import { useMinuteClock } from "@/hooks/useClock";
@@ -41,6 +41,18 @@ const METRIC_SHORT_KEYS: Record<CfUsageMetric, MessageKey> = {
   durableObjectsRequests: "cfUsage.short.durableObjectsRequests",
   durableObjectsDuration: "cfUsage.short.durableObjectsDuration",
 };
+
+/**
+ * 折叠箭头直接画，不从 lucide-react 引：向下箭头原来只有设置页等延迟加载的页面在用，首页一引用，
+ * Rolldown 就把首页和其它页面共用的模块（实时数据、登录态等约 20KB）拆成单独一个文件，首页多一次请求（ipstack.7 的问题）。
+ */
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="cf-usage-chevron">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 
 /** 展开还是收起记在这台设备上；默认收起，手机上首页不被它占掉半屏。 */
 const EXPANDED_STORAGE_KEY = "cfsm-luminaplus:cf-usage-expanded";
@@ -168,7 +180,7 @@ export function CfUsagePanel() {
               )}
             </span>
           ) : null}
-          <ChevronDown size={14} aria-hidden className="cf-usage-chevron" />
+          <ChevronIcon />
         </button>
         {expanded && hasData ? (
           <div className="instance-segmented cf-usage-day" role="group" aria-label={t("cfUsage.dayLabel")}>
