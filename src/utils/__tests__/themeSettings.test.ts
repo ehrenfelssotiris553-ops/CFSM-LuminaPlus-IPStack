@@ -19,6 +19,12 @@ describe("normalizeThemeSettings", () => {
     );
   });
 
+  it("treats Lumina Prism's follow-the-style layout as this theme's defaults", () => {
+    const settings = normalizeThemeSettings({ desktopNodeViewMode: "follow", mobileNodeViewMode: "follow" } as never);
+    expect(settings.desktopNodeViewMode).toBe("large");
+    expect(settings.mobileNodeViewMode).toBe("compact");
+  });
+
   it("defaults overview ratings on unless explicitly disabled", () => {
     expect(normalizeThemeSettings({}).showOverviewRatings).toBe(true);
     expect(normalizeThemeSettings({ showOverviewRatings: false }).showOverviewRatings).toBe(false);

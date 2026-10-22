@@ -300,6 +300,8 @@ function normalizeNodeViewMode(
   fallback: NodeViewMode,
 ): NodeViewMode {
   if (isNodeViewMode(value)) return value;
+  // Lumina Prism 存的「跟随风格」：这个主题没有风格，按原版默认（电脑大卡片、手机小卡片）。
+  if (value === "follow") return fallback;
   // 未知旧字符串统一落到小卡，避免升级后出现无选中项。
   return typeof value === "string" && value.length > 0 ? "compact" : fallback;
 }
