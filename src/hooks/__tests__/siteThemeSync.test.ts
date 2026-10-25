@@ -121,6 +121,44 @@ describe("登录站长的改动自动同步到后端", () => {
     expect(getLocalThemeSettings()).toEqual({});
   });
 
+  it("keeps Lumina Prism's settings when an edit here is saved", async () => {
+    // 两个主题共用站点设置：这边改一项，原来整份替换会把 Prism 的风格、布局、打码设置全删掉。
+    acceptWrites();
+    seedConfig({
+      skin: "paper",
+      latencyStyle: "capsule",
+      screenshotMaskNodes: ["a"],
+      desktopNodeViewMode: "follow",
+      mobileNodeViewMode: "ring",
+      showCostSummaryFloatingButton: true,
+    });
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ surfaceOpacity: 60 });
+    await flushDebounce();
+
+    const sent = mocks.saveThemeOptions.mock.calls[0][0];
+    expect(sent).toMatchObject({
+      surfaceOpacity: 60,
+      skin: "paper",
+      latencyStyle: "capsule",
+      screenshotMaskNodes: ["a"],
+      desktopNodeViewMode: "follow",
+      mobileNodeViewMode: "ring",
+    });
+    // 老的资产悬浮按钮开关读的时候已经并进 showCostSummary，不再原样留着。
+    expect(sent).not.toHaveProperty("showCostSummaryFloatingButton");
+    expect(sent.showCostSummary).toBe(true);
+  });
+
+  it("does not save just because the backend carries another theme's settings", async () => {
+    acceptWrites();
+    seedConfig({ skin: "paper", surfaceOpacity: 60 });
+    stop = startSiteThemeAutoSync();
+    saveLocalThemeSettings({ surfaceOpacity: 60 });
+    await flushDebounce();
+    expect(mocks.saveThemeOptions).not.toHaveBeenCalled();
+  });
+
   it("merges a node badge edit into the site snapshot per node and protocol", async () => {
     acceptWrites();
     seedConfig({ homepageIpStackOverrides: { a: { ipv4: true, ipv6: false }, b: { ipv4: false } } });

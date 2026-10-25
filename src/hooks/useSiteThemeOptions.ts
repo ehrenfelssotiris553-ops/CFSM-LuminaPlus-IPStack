@@ -26,11 +26,19 @@ import {
   type PingLineOverridesByNode,
 } from "@/utils/pingLineOverrides";
 import {
+  DEFAULT_THEME_SETTINGS,
+  isNodeViewMode,
   normalizeThemeSettings,
   mergeThemeSettingsLayers,
   withPreferredAppearance,
   type Appearance,
 } from "@/utils/themeSettings";
+import { LOCAL_IP_STACK_EDITS_KEY } from "@/utils/ipStack";
+import {
+  LOCAL_PING_GROUP_EDITS_KEY,
+  LOCAL_PING_PROTOCOL_EDITS_KEY,
+  LOCAL_PING_VISIBILITY_EDITS_KEY,
+} from "@/utils/pingVisibility";
 
 export interface SiteThemeOptionsSources {
   /** 后端当前的 theme_options（站点预设）。 */
@@ -67,6 +75,7 @@ export function buildSiteThemeOptions({
   );
   return {
     ...normalized,
+    ...keepForeignViewModes(normalized, mergeThemeSettingsLayers(siteSettings, localSettings)),
     // 本机换过的行压过站点已存的那份（见 mergePingLineOverridesByNode）。
     homepagePingLineOverrides: mergePingLineOverridesByNode(
       normalized.homepageMultiPingTaskIds,
@@ -77,6 +86,63 @@ export function buildSiteThemeOptions({
   };
 }
 
+const VIEW_MODE_KEYS = ["desktopNodeViewMode", "mobileNodeViewMode"] as const;
+
+/**
+ * 卡片视图存的值这个主题认不得时原样写回（Lumina Prism 的「跟随风格」follow、六种新布局）。
+ *
+ * 这里读的时候按默认处理（见 normalizeThemeSettings），可写回去就成了 large / compact，切回 Prism 布局不再跟随风格。
+ * 设置页的草稿里装的是读出来的那个默认值，和它一样就说明没改，照样留原值；改成了别的才写这边的值。
+ */
+function keepForeignViewModes(
+  normalized: ReturnType<typeof normalizeThemeSettings>,
+  layered: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of VIEW_MODE_KEYS) {
+    const raw = layered[key];
+    if (typeof raw !== "string" || raw === "" || isNodeViewMode(raw)) continue;
+    const asRead = normalizeThemeSettings({ [key]: raw } as ThemeSettings & Record<string, unknown>)[key];
+    if (normalized[key] === asRead) out[key] = raw;
+  }
+  return out;
+}
+
+/**
+ * 这个主题自己管的键：保存时由 {@link buildSiteThemeOptions} 按白名单重新写出来。
+ * 配色两项不在 normalizeThemeSettings 里（见 pickPaletteSettings），`showCostSummaryFloatingButton` 是读的时候并进
+ * showCostSummary 的老开关 —— 原样留着的话，关掉资产入口它还会把入口顶回来。
+ */
+const MANAGED_SITE_KEYS = new Set<string>([
+  ...Object.keys(DEFAULT_THEME_SETTINGS),
+  "metricColors",
+  "darkDepth",
+  "showCostSummaryFloatingButton",
+  SITE_SYNC_MARKER_KEY,
+  LOCAL_IP_STACK_EDITS_KEY,
+  LOCAL_PING_VISIBILITY_EDITS_KEY,
+  LOCAL_PING_GROUP_EDITS_KEY,
+  LOCAL_PING_PROTOCOL_EDITS_KEY,
+]);
+
+/**
+ * 后端 theme_options 里这个主题不管的键（Lumina Prism 的风格、新布局、截图打码等，或别的主题的设置），保存时原样带回去。
+ *
+ * 保存是整份替换：不带上它们，站长在这里改一个开关，Prism 那边的设置就全没了 —— 两个主题共用同一份站点设置，
+ * 而切回 Prism 时这边写的同步标记比它的备份新，它连「要不要恢复」都不会问。
+ * 只在发给后端和导出时并进去；判断「本主题的设置变没变」（冲突、要不要发、备份）仍只看 {@link buildSiteThemeOptions}。
+ */
+export function unmanagedSiteSettings(
+  siteSettings: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!siteSettings) return {};
+  return Object.fromEntries(
+    Object.entries(siteSettings).filter(
+      ([key]) => key !== "__proto__" && !MANAGED_SITE_KEYS.has(key),
+    ),
+  );
+}
+
 /** 当前设备的站点快照（未登录时「复制配置 JSON」导出的就是它）。 */
 export function useSiteThemeOptions(draftSettings?: ThemeSettings) {
   const { data: config } = usePublicConfig();
@@ -84,14 +150,17 @@ export function useSiteThemeOptions(draftSettings?: ThemeSettings) {
   const localLineOverrides = useAllPingLineOverrides();
 
   const snapshot = useMemo(
-    () =>
-      buildSiteThemeOptions({
+    () => ({
+      // 粘回后台是整份替换，别的主题的设置也要跟着导出，见 unmanagedSiteSettings。
+      ...unmanagedSiteSettings(config?.theme_settings),
+      ...buildSiteThemeOptions({
         siteSettings: config?.theme_settings,
         preferredAppearance: config?.preferredAppearance,
         localSettings,
         draftSettings,
         localLineOverrides,
       }),
+    }),
     [
       config?.preferredAppearance,
       config?.theme_settings,
@@ -262,6 +331,7 @@ async function runSync() {
     allowConflictOnce = false;
     if (!sameJson(snapshot, buildSiteThemeOptions(site)) || config.pingDisplayMigration === true) {
       const { theme_options: saved } = await saveThemeOptions({
+        ...unmanagedSiteSettings(config.theme_settings),
         ...snapshot,
         [SITE_SYNC_MARKER_KEY]: Date.now(),
       });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { buildSiteThemeOptions } from "@/hooks/useSiteThemeOptions";
+import { buildSiteThemeOptions, unmanagedSiteSettings } from "@/hooks/useSiteThemeOptions";
 import { EMPTY_PING_LINE_OVERRIDES_BY_NODE } from "@/utils/pingLineOverrides";
 import { LOCAL_IP_STACK_EDITS_KEY } from "@/utils/ipStack";
 
@@ -66,5 +66,46 @@ describe("buildSiteThemeOptions", () => {
 
     expect(snapshot.desktopNodeViewMode).toBe("large");
     expect(snapshot.metricColors).toEqual({ cpu: "#333333", disk: "#222222" });
+  });
+
+  it("writes Lumina Prism's view modes back unchanged unless they were changed here", () => {
+    // Prism 的「跟随风格」和新布局：这里按默认读（电脑大卡片、手机小卡片），写回去要还是原值。
+    const site = { desktopNodeViewMode: "follow", mobileNodeViewMode: "ring" };
+    expect(buildSiteThemeOptions({ ...base, siteSettings: site })).toMatchObject(site);
+    // 设置页草稿里是读出来的默认值，等于没改。
+    expect(
+      buildSiteThemeOptions({
+        ...base,
+        siteSettings: site,
+        draftSettings: { desktopNodeViewMode: "large", mobileNodeViewMode: "compact" },
+      }),
+    ).toMatchObject(site);
+    // 在这里改成了别的，就写这边的。
+    expect(
+      buildSiteThemeOptions({
+        ...base,
+        siteSettings: site,
+        localSettings: { desktopNodeViewMode: "list", mobileNodeViewMode: "mini" },
+      }),
+    ).toMatchObject({ desktopNodeViewMode: "list", mobileNodeViewMode: "mini" });
+  });
+});
+
+describe("unmanagedSiteSettings", () => {
+  it("keeps keys this theme does not manage and drops the ones it rewrites", () => {
+    expect(
+      unmanagedSiteSettings({
+        skin: "paper",
+        screenshotMaskNodes: ["a"],
+        mikus: { enabled: false },
+        surfaceOpacity: 60,
+        metricColors: { cpu: "#111111" },
+        darkDepth: 60,
+        showCostSummaryFloatingButton: true,
+        luminaplusSyncedAt: 1,
+        [LOCAL_IP_STACK_EDITS_KEY]: { a: { ipv4: true } },
+      }),
+    ).toEqual({ skin: "paper", screenshotMaskNodes: ["a"], mikus: { enabled: false } });
+    expect(unmanagedSiteSettings(undefined)).toEqual({});
   });
 });
