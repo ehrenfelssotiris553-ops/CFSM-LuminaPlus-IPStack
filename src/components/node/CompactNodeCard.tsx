@@ -27,6 +27,7 @@ import { formatBytes } from "@/utils/format";
 import { speedRateColor, speedRateColorFromBytes } from "@/utils/metricTone";
 import { supportsFineHover } from "@/utils/mediaQuery";
 import { formatHealthBucketTooltip } from "./pingBucketText";
+import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { MultiPingStatus } from "./MultiPingStatus";
 import {
@@ -215,10 +216,6 @@ function HealthBars({
   const activeIndex = hoveredIndex ?? selectedIndex;
   const activeBucket = activeIndex == null ? null : bars[activeIndex] ?? null;
   const activeTooltip = activeBucket ? formatHealthBucketTooltip(activeBucket, kind) : null;
-  const activeLeft =
-    activeIndex == null || bars.length === 0
-      ? "50%"
-      : `clamp(42px, ${((activeIndex + 0.5) / bars.length) * 100}%, calc(100% - 42px))`;
 
   const selectIndex = (next: number) => {
     if (bars.length === 0) return;
@@ -251,7 +248,6 @@ function HealthBars({
       ref={containerRef}
       className="compact-node-health-bars"
       data-kind={kind}
-      style={{ "--compact-health-tooltip-x": activeLeft } as CSSProperties}
       tabIndex={0}
       role="group"
       aria-label={t("compact.historyAria", {
@@ -286,11 +282,12 @@ function HealthBars({
         event.preventDefault();
       }}
     >
-      {activeTooltip && (
-        <span className="compact-node-health-tooltip" role="status">
-          {activeTooltip}
-        </span>
-      )}
+      <HealthBucketTooltip
+        text={activeTooltip}
+        index={activeIndex}
+        count={bars.length}
+        className="compact-node-health-tooltip"
+      />
       {bars.map((bucket, index) => {
         const slot = healthBarSlotModel(bucket, kind);
         const style = {
